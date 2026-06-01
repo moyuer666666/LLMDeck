@@ -105,13 +105,23 @@ myChathub/
 
 ## 🤝 参与贡献
 
-我们非常欢迎任何形式的贡献，无论是报告 Bug、提出新功能，还是提交 Pull Request。
+如果您想改进该项目，欢迎参与贡献！请通过以下步骤 Fork 本仓库并提交 Pull Request：
 
-1. Fork 本仓库。
-2. 创建您的特性分支 (`git checkout -b feature/amazing-feature`)。
-3. 提交您的修改 (`git commit -m 'feat: add some amazing feature'`)。
-4. 推送到您的分支 (`git push origin feature/amazing-feature`)。
-5. 在本仓库发起一个 Pull Request。
+1. **Fork** 本仓库到您的个人 GitHub 账号。
+2. 克隆您 Fork 后的仓库到本地，并创建您的特性分支 (`git checkout -b feature/amazing-feature`)。
+3. 在本地编写并验证代码，然后提交您的修改 (`git commit -m 'feat: add some amazing feature'`)。
+4. 将修改推送到您 Fork 仓库的分支 (`git push origin feature/amazing-feature`)。
+5. 在本仓库的 Pull Requests 页面发起一个 **Pull Request**，我们会及时进行 Review 和合并！
+
+---
+
+## 📝 TODO List
+
+以下是本项目目前计划解决和改进的待办事项：
+
+- [ ] **修复 Gemini 笔记本加载错误**：修复打开 Gemini 网页时可能弹出“无法加载您的笔记本”的问题（在分支上fix-gemini-notebook-error(未解决)处理）。
+- [ ] **重构 Prompt 提示词库**：重新设计和连接提示词快捷面板（支持 `/` 快捷指令和输入框左侧书本图标的交互）。
+- [ ] **支持应用自动更新 (Auto-updater)**：配置发布管道并集成 Electron 自动升级功能。
 
 ---
 
