@@ -77,7 +77,7 @@ yarn dev
 ```bash
 yarn package
 ```
-打包输出的文件将保存在 `chathub-web/release/` 目录下。
+打包输出的文件将保存在 `chathub-desktop/release/` 目录下。
 
 ---
 
@@ -85,12 +85,12 @@ yarn package
 
 ```text
 myChathub/
-├── chathub-web/
+├── chathub-desktop/
 │   ├── main.cjs             # Electron 主进程 (窗口创建、代理拦截、原生菜单移除等)
 │   ├── preload.cjs          # Electron 预加载脚本
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── components/  # 公用 UI 组件 (SyncTerminal, Sidebar, settings...)
+│   │   │   ├── components/  # 公用 UI 组件 (SyncInputBox, Sidebar, settings...)
 │   │   │   ├── hooks/       # React 自定义 Hook (useChatbots, usePremium...)
 │   │   │   ├── pages/       # 主页面组件 (MultiBotChatPanel, SettingPage...)
 │   │   │   └── router.tsx   # 路由管理
