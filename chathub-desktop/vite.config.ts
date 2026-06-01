@@ -7,6 +7,7 @@ import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig(({ mode }) => {
   return {
+    base: './',
     resolve: {
       alias: {
         'webextension-polyfill': path.resolve(__dirname, 'src/shim/browser.ts'),
