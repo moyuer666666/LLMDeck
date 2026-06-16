@@ -88,6 +88,52 @@ const GeneralChatPanel: FC<{
     [setLayout],
   )
 
+  const handleNewChat = useCallback(async () => {
+    const webviews = document.querySelectorAll('webview')
+    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+    for (const webview of Array.from(webviews)) {
+      try {
+        const wv = webview as any
+        // Try to click "new chat" buttons common across AI chat UIs
+        const result = await wv.executeJavaScript(`
+          (function() {
+            var selectors = [
+              'button[data-testid="create-new-chat-button"]',
+              'a[data-testid="create-new-chat-button"]',
+              'nav a[href="/"]',
+              'button[aria-label*="New chat"]',
+              'button[aria-label*="new chat"]',
+              'button[aria-label*="新对话"]',
+              'button[aria-label*="新建对话"]',
+              'button[aria-label*="新建"]',
+              'a[href="/new"]',
+              'a[href="/app"]',
+              'a[aria-label*="New chat"]',
+              'a[aria-label*="新对话"]'
+            ];
+            for (var i = 0; i < selectors.length; i++) {
+              try {
+                var el = document.querySelector(selectors[i]);
+                if (el && el.offsetHeight > 0) {
+                  el.click();
+                  return 'clicked: ' + selectors[i];
+                }
+              } catch(e) {}
+            }
+            // Fallback: navigate to the origin URL (starts a new conversation)
+            window.location.href = window.location.origin;
+            return 'navigated-to-origin';
+          })()
+        `)
+        console.log('New chat result:', result)
+        await delay(200)
+      } catch (err) {
+        console.error('Failed to create new chat in webview:', err)
+      }
+    }
+  }, [])
+
   const handleSend = useCallback(async (text: string, files: File[]) => {
     const webviews = document.querySelectorAll('webview')
     if (webviews.length === 0) return
@@ -115,12 +161,12 @@ const GeneralChatPanel: FC<{
       }
     }
 
-    // 3. Read image files as ArrayBuffer for clipboard IPC
-    const imageBuffers: ArrayBuffer[] = []
+    // 3. Read image files as ArrayBuffer for IPC clipboard
+    const imageDataList: { buffer: ArrayBuffer; type: string; name: string }[] = []
     for (const imgFile of imageFiles) {
       try {
         const buffer = await imgFile.arrayBuffer()
-        imageBuffers.push(buffer)
+        imageDataList.push({ buffer, type: imgFile.type, name: imgFile.name })
       } catch (err) {
         console.error('Failed to read image file:', imgFile.name, err)
       }
@@ -301,27 +347,164 @@ const GeneralChatPanel: FC<{
       })()
     `
 
+    // Build script to inject an image via synthetic paste event inside the webview
+    const buildPasteImageScript = (base64: string, mimeType: string, fileName: string) => `
+      (function() {
+        try {
+          var byteChars = atob('${base64}');
+          var byteArray = new Uint8Array(byteChars.length);
+          for (var i = 0; i < byteChars.length; i++) {
+            byteArray[i] = byteChars.charCodeAt(i);
+          }
+          var blob = new Blob([byteArray], { type: '${mimeType}' });
+          var file = new File([blob], '${fileName}', { type: '${mimeType}', lastModified: Date.now() });
+
+          // Find the input/editable area
+          var inputSelectors = [
+            '#prompt-textarea',
+            'div[contenteditable="true"][role="textbox"]',
+            'p[contenteditable="true"]',
+            '[contenteditable="true"]',
+            '[role="textbox"]',
+            'textarea'
+          ];
+          var el = null;
+          for (var j = 0; j < inputSelectors.length; j++) {
+            var found = document.querySelector(inputSelectors[j]);
+            if (found && found.offsetHeight > 0) { el = found; break; }
+          }
+
+          var result = [];
+
+          // Method 1: Synthetic paste event with custom clipboardData
+          if (el) {
+            el.focus();
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            var pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+            Object.defineProperty(pasteEvent, 'clipboardData', {
+              value: {
+                files: dt.files,
+                items: [{
+                  kind: 'file',
+                  type: '${mimeType}',
+                  getAsFile: function() { return file; }
+                }],
+                types: ['Files'],
+                getData: function() { return ''; }
+              }
+            });
+            el.dispatchEvent(pasteEvent);
+            result.push('paste-dispatched');
+          }
+
+          // Method 2: Synthetic drop event
+          if (el) {
+            try {
+              var dropDt = new DataTransfer();
+              dropDt.items.add(file);
+              var dragOverEvent = new DragEvent('dragover', {
+                bubbles: true, cancelable: true, dataTransfer: dropDt
+              });
+              el.dispatchEvent(dragOverEvent);
+              var dropEvent = new DragEvent('drop', {
+                bubbles: true, cancelable: true, dataTransfer: dropDt
+              });
+              el.dispatchEvent(dropEvent);
+              result.push('drop-dispatched');
+            } catch(dropErr) {
+              result.push('drop-error: ' + dropErr.message);
+            }
+          }
+
+          // Method 3: Find file input and set its files programmatically
+          var fileInputs = document.querySelectorAll('input[type="file"]');
+          for (var k = 0; k < fileInputs.length; k++) {
+            try {
+              var fi = fileInputs[k];
+              var fiDt = new DataTransfer();
+              fiDt.items.add(file);
+              fi.files = fiDt.files;
+              fi.dispatchEvent(new Event('change', { bubbles: true }));
+              result.push('file-input-set');
+              break;
+            } catch(fiErr) {
+              result.push('file-input-error: ' + fiErr.message);
+            }
+          }
+
+          return result.join(', ');
+        } catch(e) {
+          return 'error: ' + e.message;
+        }
+      })()
+    `
+
+    // Helper: read file as base64
+    const readFileAsBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          const base64 = dataUrl.split(',')[1]
+          resolve(base64)
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+    }
+
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
     // Process each webview sequentially
     for (const webview of Array.from(webviews)) {
       try {
         const wv = webview as any
-        const wcId = wv.getWebContentsId?.()
+        let wcId: number | undefined
+        try { wcId = wv.getWebContentsId?.() } catch {}
 
-        // Step 1: Focus the input element first
+        // Step 1: Focus the input element
         await wv.executeJavaScript(buildFocusScript())
         await delay(100)
 
-        // Step 2: Upload images via Electron clipboard + paste
-        if (imageBuffers.length > 0 && window.electronAPI && wcId) {
-          for (const buffer of imageBuffers) {
-            // Write image to system clipboard via IPC
-            window.electronAPI.clipboardWriteImage(buffer)
-            await delay(100)
-            // Paste from clipboard into the webview
-            window.electronAPI.pasteToWebview(wcId)
-            await delay(500) // Wait for the paste to be processed
+        // Step 2: Upload images
+        if (imageDataList.length > 0) {
+          for (const imgData of imageDataList) {
+            let uploaded = false
+
+            // Method A: Use Electron IPC clipboard + paste (most reliable for native paste)
+            if (window.electronAPI && wcId) {
+              try {
+                const writeResult = await window.electronAPI.clipboardWriteImage(imgData.buffer)
+                console.log('Clipboard write result:', writeResult)
+                if (writeResult?.success) {
+                  await delay(50)
+                  // Re-focus input before paste
+                  await wv.executeJavaScript(buildFocusScript())
+                  await delay(50)
+                  const pasteResult = await window.electronAPI.pasteToWebview(wcId)
+                  console.log('Paste result:', pasteResult)
+                  if (pasteResult?.success) {
+                    uploaded = true
+                    await delay(500)
+                  }
+                }
+              } catch (ipcErr) {
+                console.error('IPC clipboard approach failed:', ipcErr)
+              }
+            }
+
+            // Method B: Fallback — inject base64 image via executeJavaScript
+            if (!uploaded) {
+              try {
+                const base64 = await readFileAsBase64(new File([imgData.buffer], imgData.name, { type: imgData.type }))
+                const result = await wv.executeJavaScript(buildPasteImageScript(base64, imgData.type, imgData.name))
+                console.log('JS inject image result:', result)
+                await delay(500)
+              } catch (jsErr) {
+                console.error('JS inject image failed:', jsErr)
+              }
+            }
           }
         }
 
@@ -361,7 +544,7 @@ const GeneralChatPanel: FC<{
         ))}
       </div>
       {isInputBarOpen && (
-        <SyncInputBox layout={layout} onLayoutChange={onLayoutChange} onSend={handleSend} />
+        <SyncInputBox layout={layout} onLayoutChange={onLayoutChange} onSend={handleSend} onNewChat={handleNewChat} />
       )}
     </div>
   )

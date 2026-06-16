@@ -1,5 +1,5 @@
 import { FC, useState, useEffect, useRef } from 'react'
-import { FiBookOpen, FiPaperclip, FiX, FiFileText } from 'react-icons/fi'
+import { FiEdit, FiPaperclip, FiX, FiFileText } from 'react-icons/fi'
 import LayoutSwitch from './LayoutSwitch'
 import { Layout } from '~app/consts'
 import { cx } from '~/utils'
@@ -8,9 +8,10 @@ interface Props {
   layout: Layout
   onLayoutChange: (layout: Layout) => void
   onSend: (text: string, files: File[]) => void
+  onNewChat: () => void
 }
 
-const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend }) => {
+const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) => {
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -42,10 +43,33 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend }) => {
     }
   }
 
+  // Handle clipboard paste for images/files
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const pastedFiles: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        const file = items[i].getAsFile()
+        if (file) pastedFiles.push(file)
+      }
+    }
+
+    if (pastedFiles.length > 0) {
+      setFiles((prev) => [...prev, ...pastedFiles])
+      e.preventDefault() // Prevent pasting raw data as text
+    }
+  }
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files)
       setFiles((prev) => [...prev, ...selectedFiles])
+    }
+    // Reset file input so re-selecting the same file works
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
   }
 
@@ -102,8 +126,14 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend }) => {
 
         {/* Center & Right: Text input bar */}
         <div className="flex grow flex-row items-end gap-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-2 shadow-sm min-h-[46px]">
-          {/* Prompt Icon */}
-          <FiBookOpen className="w-5 h-5 text-zinc-400 dark:text-zinc-500 shrink-0 mb-0.5 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors" />
+          {/* New Chat Button — uses edit/compose icon like ChatGPT/Claude */}
+          <button
+            onClick={onNewChat}
+            className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors mb-0.5 shrink-0"
+            title="New conversation for all AI"
+          >
+            <FiEdit className="w-5 h-5" />
+          </button>
 
           {/* Text Area */}
           <textarea
@@ -112,6 +142,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend }) => {
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder="Use / to select prompts, Shift+Enter to add new line"
             className="grow bg-transparent border-0 resize-none outline-none text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans min-h-[24px] max-h-[120px] py-0.5"
           />

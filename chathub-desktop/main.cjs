@@ -25,6 +25,48 @@ console.log('--- Electron Main Process Starting ---')
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (ChatHub)'
 const isDev = !app.isPackaged
 
+// Register IPC handlers (must be registered once, outside createWindow)
+// Write an image (as Buffer) to the system clipboard — async/awaitable
+ipcMain.handle('clipboard-write-image', async (event, imageBuffer) => {
+  try {
+    const img = nativeImage.createFromBuffer(Buffer.from(imageBuffer))
+    if (img.isEmpty()) {
+      return { success: false, error: 'Invalid image data' }
+    }
+    clipboard.writeImage(img)
+    return { success: true }
+  } catch (err) {
+    console.error('Failed to write image to clipboard:', err)
+    return { success: false, error: err.message }
+  }
+})
+
+// Paste clipboard content into a specific webContents (by ID) — async/awaitable
+ipcMain.handle('paste-to-webview', async (event, webContentsId) => {
+  try {
+    const wc = webContents.fromId(webContentsId)
+    if (wc) {
+      wc.paste()
+      return { success: true }
+    }
+    return { success: false, error: 'webContents not found for id: ' + webContentsId }
+  } catch (err) {
+    console.error('Failed to paste to webview:', err)
+    return { success: false, error: err.message }
+  }
+})
+
+// Write text to the system clipboard — async/awaitable
+ipcMain.handle('clipboard-write-text', async (event, text) => {
+  try {
+    clipboard.writeText(text)
+    return { success: true }
+  } catch (err) {
+    console.error('Failed to write text to clipboard:', err)
+    return { success: false, error: err.message }
+  }
+})
+
 function createWindow() {
   console.log('Action: Creating Browser Window...')
   const mainWindow = new BrowserWindow({
@@ -71,37 +113,6 @@ function createWindow() {
     } else {
       console.log('Resetting proxy to system default')
       session.defaultSession.setProxy({ mode: 'system' })
-    }
-  })
-
-  // Write an image (as Buffer) to the system clipboard
-  ipcMain.on('clipboard-write-image', (event, imageBuffer) => {
-    try {
-      const img = nativeImage.createFromBuffer(Buffer.from(imageBuffer))
-      clipboard.writeImage(img)
-    } catch (err) {
-      console.error('Failed to write image to clipboard:', err)
-    }
-  })
-
-  // Paste clipboard content into a specific webContents (by ID)
-  ipcMain.on('paste-to-webview', (event, webContentsId) => {
-    try {
-      const wc = webContents.fromId(webContentsId)
-      if (wc) {
-        wc.paste()
-      }
-    } catch (err) {
-      console.error('Failed to paste to webview:', err)
-    }
-  })
-
-  // Write text to the system clipboard
-  ipcMain.on('clipboard-write-text', (event, text) => {
-    try {
-      clipboard.writeText(text)
-    } catch (err) {
-      console.error('Failed to write text to clipboard:', err)
     }
   })
 
@@ -186,4 +197,3 @@ app.on('web-contents-created', (event, contents) => {
     menu.popup({ window: win })
   })
 })
-
