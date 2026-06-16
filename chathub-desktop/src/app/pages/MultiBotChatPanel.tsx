@@ -138,37 +138,28 @@ const GeneralChatPanel: FC<{
     const webviews = document.querySelectorAll('webview')
     if (webviews.length === 0) return
 
-    // 1. Separate images and text/document files
-    const imageFiles = files.filter((f) => f.type.startsWith('image/'))
-    const textFiles = files.filter((f) => !f.type.startsWith('image/'))
-
-    // 2. Read text files content and prepend to prompt
-    const readTextFile = (file: File): Promise<string> => {
-      return new Promise((resolve) => {
+    // Helper: read file as base64
+    const readFileAsBase64 = (file: File): Promise<string> => {
+      return new Promise((resolve, reject) => {
         const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.readAsText(file)
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          const base64 = dataUrl.split(',')[1]
+          resolve(base64)
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
       })
     }
 
-    let finalPrompt = text
-    for (const file of textFiles) {
+    // Read all files to base64
+    const filesData: { base64: string; type: string; name: string }[] = []
+    for (const file of files) {
       try {
-        const content = await readTextFile(file)
-        finalPrompt = `[File: ${file.name}]\n\`\`\`\n${content}\n\`\`\`\n\n${finalPrompt}`
+        const base64 = await readFileAsBase64(file)
+        filesData.push({ base64, type: file.type || 'application/octet-stream', name: file.name })
       } catch (err) {
         console.error('Failed to read file:', file.name, err)
-      }
-    }
-
-    // 3. Read image files as ArrayBuffer for IPC clipboard
-    const imageDataList: { buffer: ArrayBuffer; type: string; name: string }[] = []
-    for (const imgFile of imageFiles) {
-      try {
-        const buffer = await imgFile.arrayBuffer()
-        imageDataList.push({ buffer, type: imgFile.type, name: imgFile.name })
-      } catch (err) {
-        console.error('Failed to read image file:', imgFile.name, err)
       }
     }
 
@@ -202,6 +193,101 @@ const GeneralChatPanel: FC<{
         return false;
       })()
     `
+
+    // Script to upload all files to the chatbot using the best mechanism
+    const buildUploadFilesScript = (filesList: { base64: string; type: string; name: string }[]) => {
+      const escapedJson = JSON.stringify(filesList)
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+      return `
+        (function() {
+          try {
+            var filesData = ${escapedJson};
+            if (!filesData || filesData.length === 0) return 'no-files';
+
+            var dt = new DataTransfer();
+            for (var i = 0; i < filesData.length; i++) {
+              var data = filesData[i];
+              var byteChars = atob(data.base64);
+              var byteArray = new Uint8Array(byteChars.length);
+              for (var j = 0; j < byteChars.length; j++) {
+                byteArray[j] = byteChars.charCodeAt(j);
+              }
+              var blob = new Blob([byteArray], { type: data.type });
+              var file = new File([blob], data.name, { type: data.type, lastModified: Date.now() });
+              dt.items.add(file);
+            }
+
+            if (dt.files.length === 0) return 'no-files-created';
+
+            // Find input element
+            var inputSelectors = [
+              '#prompt-textarea',
+              'div[contenteditable="true"][role="textbox"]',
+              'p[contenteditable="true"]',
+              '[contenteditable="true"]',
+              '[role="textbox"]',
+              'textarea',
+              'input[type="text"]'
+            ];
+            var el = null;
+            for (var k = 0; k < inputSelectors.length; k++) {
+              var found = document.querySelector(inputSelectors[k]);
+              if (found && found.offsetHeight > 0) { el = found; break; }
+            }
+
+            var result = [];
+
+            // Helper to find file input closest to the active input
+            function findFileInput() {
+              if (el) {
+                var container = el.closest('form') || el.closest('.chat-container') || el.parentElement;
+                for (var j = 0; j < 5 && container; j++) {
+                  var fi = container.querySelector('input[type="file"]');
+                  if (fi) return fi;
+                  container = container.parentElement;
+                }
+              }
+              var multipleFileInput = document.querySelector('input[type="file"][multiple]');
+              if (multipleFileInput) return multipleFileInput;
+              return document.querySelector('input[type="file"]');
+            }
+
+            var fileInput = findFileInput();
+            if (fileInput) {
+              fileInput.files = dt.files;
+              fileInput.dispatchEvent(new Event('input', { bubbles: true }));
+              fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+              result.push('file-input-set');
+            } else {
+              if (el) {
+                el.focus();
+                var pasteEvent = new ClipboardEvent('paste', {
+                  bubbles: true,
+                  cancelable: true,
+                  clipboardData: dt
+                });
+                if (pasteEvent.clipboardData !== dt) {
+                  Object.defineProperty(pasteEvent, 'clipboardData', {
+                    value: dt,
+                    writable: false,
+                    configurable: true
+                  });
+                }
+                el.dispatchEvent(pasteEvent);
+                result.push('paste-dispatched');
+              } else {
+                result.push('no-input-element');
+              }
+            }
+
+            return result.join(', ');
+          } catch(e) {
+            return 'error: ' + e.message;
+          }
+        })()
+      `
+    }
 
     // Build script that finds input and inserts text
     const buildInsertTextScript = (prompt: string) => {
@@ -272,187 +358,73 @@ const GeneralChatPanel: FC<{
       `
     }
 
+    // Build script to wait for file upload completion and click send
     const buildSendScript = () => `
-      (function() {
-        var btnSelectors = [
-          'button[data-testid="send-button"]',
-          'button[aria-label*="Send"]',
-          'button[aria-label*="send"]',
-          'button[aria-label*="发送"]',
-          'button[aria-label*="submit"]',
-          'button[aria-label*="Submit"]',
-          'form button[type="submit"]',
-          'button.send-button',
-          'button[class*="send" i]',
-          '[data-testid*="send"]'
-        ];
-        
-        var sendBtn = null;
-        for (var i = 0; i < btnSelectors.length; i++) {
-          try {
-            var btn = document.querySelector(btnSelectors[i]);
-            if (btn && btn.offsetHeight > 0) {
-              sendBtn = btn;
-              break;
-            }
-          } catch(e) {}
-        }
-        
-        if (!sendBtn) {
-          var activeEl = document.activeElement;
-          if (activeEl) {
-            var container = activeEl.closest('form') || activeEl.parentElement;
-            for (var j = 0; j < 5 && container; j++) {
-              var buttons = container.querySelectorAll('button');
-              for (var k = 0; k < buttons.length; k++) {
-                var b = buttons[k];
-                var rect = b.getBoundingClientRect();
-                if (rect.width > 0 && rect.height > 0 && !b.disabled) {
-                  var html = (b.innerHTML || '').toLowerCase();
-                  var ariaLabel = (b.getAttribute('aria-label') || '').toLowerCase();
-                  if (html.includes('send') || html.includes('发送') || 
-                      ariaLabel.includes('send') || ariaLabel.includes('发送') ||
-                      b.querySelector('svg')) {
-                    sendBtn = b;
-                    break;
-                  }
-                }
-              }
-              if (sendBtn) break;
-              container = container.parentElement;
-            }
-          }
-        }
-        
-        if (sendBtn && !sendBtn.disabled) {
-          sendBtn.click();
-          return 'clicked-send';
-        }
-        
-        if (document.activeElement) {
-          var enterEvent = new KeyboardEvent('keydown', {
-            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-            bubbles: true, cancelable: true
-          });
-          document.activeElement.dispatchEvent(enterEvent);
-          var enterUp = new KeyboardEvent('keyup', {
-            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-            bubbles: true, cancelable: true
-          });
-          document.activeElement.dispatchEvent(enterUp);
-          return 'pressed-enter';
-        }
-        
-        return 'no-send-found';
-      })()
-    `
-
-    // Build script to inject an image via synthetic paste event inside the webview
-    const buildPasteImageScript = (base64: string, mimeType: string, fileName: string) => `
-      (function() {
+      (async function() {
         try {
-          var byteChars = atob('${base64}');
-          var byteArray = new Uint8Array(byteChars.length);
-          for (var i = 0; i < byteChars.length; i++) {
-            byteArray[i] = byteChars.charCodeAt(i);
-          }
-          var blob = new Blob([byteArray], { type: '${mimeType}' });
-          var file = new File([blob], '${fileName}', { type: '${mimeType}', lastModified: Date.now() });
-
-          // Find the input/editable area
-          var inputSelectors = [
-            '#prompt-textarea',
-            'div[contenteditable="true"][role="textbox"]',
-            'p[contenteditable="true"]',
-            '[contenteditable="true"]',
-            '[role="textbox"]',
-            'textarea'
+          var btnSelectors = [
+            'button[data-testid="send-button"]',
+            'button[aria-label*="Send"]',
+            'button[aria-label*="send"]',
+            'button[aria-label*="发送"]',
+            'button[aria-label*="submit"]',
+            'button[aria-label*="Submit"]',
+            'form button[type="submit"]',
+            'button.send-button',
+            'button[class*="send" i]',
+            '[data-testid*="send"]'
           ];
-          var el = null;
-          for (var j = 0; j < inputSelectors.length; j++) {
-            var found = document.querySelector(inputSelectors[j]);
-            if (found && found.offsetHeight > 0) { el = found; break; }
-          }
-
-          var result = [];
-
-          // Method 1: Synthetic paste event with custom clipboardData
-          if (el) {
-            el.focus();
-            var dt = new DataTransfer();
-            dt.items.add(file);
-            var pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
-            Object.defineProperty(pasteEvent, 'clipboardData', {
-              value: {
-                files: dt.files,
-                items: [{
-                  kind: 'file',
-                  type: '${mimeType}',
-                  getAsFile: function() { return file; }
-                }],
-                types: ['Files'],
-                getData: function() { return ''; }
-              }
-            });
-            el.dispatchEvent(pasteEvent);
-            result.push('paste-dispatched');
-          }
-
-          // Method 2: Synthetic drop event
-          if (el) {
-            try {
-              var dropDt = new DataTransfer();
-              dropDt.items.add(file);
-              var dragOverEvent = new DragEvent('dragover', {
-                bubbles: true, cancelable: true, dataTransfer: dropDt
-              });
-              el.dispatchEvent(dragOverEvent);
-              var dropEvent = new DragEvent('drop', {
-                bubbles: true, cancelable: true, dataTransfer: dropDt
-              });
-              el.dispatchEvent(dropEvent);
-              result.push('drop-dispatched');
-            } catch(dropErr) {
-              result.push('drop-error: ' + dropErr.message);
+          
+          function getSendButton() {
+            for (var i = 0; i < btnSelectors.length; i++) {
+              try {
+                var btn = document.querySelector(btnSelectors[i]);
+                if (btn && btn.offsetHeight > 0) return btn;
+              } catch(e) {}
             }
+            return null;
           }
 
-          // Method 3: Find file input and set its files programmatically
-          var fileInputs = document.querySelectorAll('input[type="file"]');
-          for (var k = 0; k < fileInputs.length; k++) {
-            try {
-              var fi = fileInputs[k];
-              var fiDt = new DataTransfer();
-              fiDt.items.add(file);
-              fi.files = fiDt.files;
-              fi.dispatchEvent(new Event('change', { bubbles: true }));
-              result.push('file-input-set');
+          // Wait up to 8 seconds (40 iterations * 200ms) for upload to finish
+          // Upload is finished when the button is enabled and common upload indicators are gone.
+          for (var k = 0; k < 40; k++) {
+            var sendBtn = getSendButton();
+            
+            // Check if there are active upload progress bars/spinners
+            var uploading = document.querySelector('[class*="progress" i], [class*="loading" i], [class*="spinner" i]');
+            
+            if (sendBtn && !sendBtn.disabled && !uploading) {
               break;
-            } catch(fiErr) {
-              result.push('file-input-error: ' + fiErr.message);
             }
+            await new Promise(function(resolve) { setTimeout(resolve, 200); });
           }
 
-          return result.join(', ');
-        } catch(e) {
-          return 'error: ' + e.message;
+          var finalSendBtn = getSendButton();
+          if (finalSendBtn && !finalSendBtn.disabled) {
+            finalSendBtn.click();
+            return 'clicked-send';
+          }
+          
+          if (document.activeElement) {
+            var enterEvent = new KeyboardEvent('keydown', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              bubbles: true, cancelable: true
+            });
+            document.activeElement.dispatchEvent(enterEvent);
+            var enterUp = new KeyboardEvent('keyup', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              bubbles: true, cancelable: true
+            });
+            document.activeElement.dispatchEvent(enterUp);
+            return 'pressed-enter';
+          }
+          
+          return 'no-send-found-or-disabled';
+        } catch(err) {
+          return 'error: ' + err.message;
         }
       })()
     `
-
-    // Helper: read file as base64
-    const readFileAsBase64 = (file: File): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => {
-          const dataUrl = reader.result as string
-          const base64 = dataUrl.split(',')[1]
-          resolve(base64)
-        }
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-    }
 
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -460,62 +432,31 @@ const GeneralChatPanel: FC<{
     for (const webview of Array.from(webviews)) {
       try {
         const wv = webview as any
-        let wcId: number | undefined
-        try { wcId = wv.getWebContentsId?.() } catch {}
+        
+        // Focus the webview element itself in electron layout first
+        wv.focus()
+        await delay(50)
 
-        // Step 1: Focus the input element
+        // Step 1: Focus the input element inside guest page
         await wv.executeJavaScript(buildFocusScript())
         await delay(100)
 
-        // Step 2: Upload images
-        if (imageDataList.length > 0) {
-          for (const imgData of imageDataList) {
-            let uploaded = false
-
-            // Method A: Use Electron IPC clipboard + paste (most reliable for native paste)
-            if (window.electronAPI && wcId) {
-              try {
-                const writeResult = await window.electronAPI.clipboardWriteImage(imgData.buffer)
-                console.log('Clipboard write result:', writeResult)
-                if (writeResult?.success) {
-                  await delay(50)
-                  // Re-focus input before paste
-                  await wv.executeJavaScript(buildFocusScript())
-                  await delay(50)
-                  const pasteResult = await window.electronAPI.pasteToWebview(wcId)
-                  console.log('Paste result:', pasteResult)
-                  if (pasteResult?.success) {
-                    uploaded = true
-                    await delay(500)
-                  }
-                }
-              } catch (ipcErr) {
-                console.error('IPC clipboard approach failed:', ipcErr)
-              }
-            }
-
-            // Method B: Fallback — inject base64 image via executeJavaScript
-            if (!uploaded) {
-              try {
-                const base64 = await readFileAsBase64(new File([imgData.buffer], imgData.name, { type: imgData.type }))
-                const result = await wv.executeJavaScript(buildPasteImageScript(base64, imgData.type, imgData.name))
-                console.log('JS inject image result:', result)
-                await delay(500)
-              } catch (jsErr) {
-                console.error('JS inject image failed:', jsErr)
-              }
-            }
-          }
+        // Step 2: Upload files
+        if (filesData.length > 0) {
+          const uploadResult = await wv.executeJavaScript(buildUploadFilesScript(filesData))
+          console.log('Upload files result:', uploadResult)
+          // Give it a short moment to start the upload lifecycle
+          await delay(200)
         }
 
         // Step 3: Insert text into the input
-        if (finalPrompt) {
-          const insertResult = await wv.executeJavaScript(buildInsertTextScript(finalPrompt))
-          console.log('Insert result:', insertResult)
-          await delay(300)
+        if (text) {
+          const insertResult = await wv.executeJavaScript(buildInsertTextScript(text))
+          console.log('Insert text result:', insertResult)
+          await delay(200)
         }
 
-        // Step 4: Click Send button
+        // Step 4: Wait for upload completion and click Send
         const sendResult = await wv.executeJavaScript(buildSendScript())
         console.log('Send result:', sendResult)
         await delay(200)
