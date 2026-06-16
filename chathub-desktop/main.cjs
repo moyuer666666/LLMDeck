@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, Menu, MenuItem, ipcMain } = require('electron')
+const { app, BrowserWindow, session, Menu, MenuItem, ipcMain, clipboard, nativeImage, webContents } = require('electron')
 const path = require('path')
 
 // Get localized labels for context menu items
@@ -71,6 +71,37 @@ function createWindow() {
     } else {
       console.log('Resetting proxy to system default')
       session.defaultSession.setProxy({ mode: 'system' })
+    }
+  })
+
+  // Write an image (as Buffer) to the system clipboard
+  ipcMain.on('clipboard-write-image', (event, imageBuffer) => {
+    try {
+      const img = nativeImage.createFromBuffer(Buffer.from(imageBuffer))
+      clipboard.writeImage(img)
+    } catch (err) {
+      console.error('Failed to write image to clipboard:', err)
+    }
+  })
+
+  // Paste clipboard content into a specific webContents (by ID)
+  ipcMain.on('paste-to-webview', (event, webContentsId) => {
+    try {
+      const wc = webContents.fromId(webContentsId)
+      if (wc) {
+        wc.paste()
+      }
+    } catch (err) {
+      console.error('Failed to paste to webview:', err)
+    }
+  })
+
+  // Write text to the system clipboard
+  ipcMain.on('clipboard-write-text', (event, text) => {
+    try {
+      clipboard.writeText(text)
+    } catch (err) {
+      console.error('Failed to write text to clipboard:', err)
     }
   })
 

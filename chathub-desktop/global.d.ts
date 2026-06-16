@@ -51,5 +51,8 @@ declare namespace Browser {
 interface Window {
   electronAPI?: {
     setProxy: (config: { mode: 'system' | 'custom'; server: string }) => void
+    clipboardWriteImage: (imageBuffer: ArrayBuffer | Uint8Array) => void
+    clipboardWriteText: (text: string) => void
+    pasteToWebview: (webContentsId: number) => void
   }
 }

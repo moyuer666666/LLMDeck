@@ -96,7 +96,7 @@ const GeneralChatPanel: FC<{
     const imageFiles = files.filter((f) => f.type.startsWith('image/'))
     const textFiles = files.filter((f) => !f.type.startsWith('image/'))
 
-    // 2. Read text files content
+    // 2. Read text files content and prepend to prompt
     const readTextFile = (file: File): Promise<string> => {
       return new Promise((resolve) => {
         const reader = new FileReader()
@@ -115,9 +115,50 @@ const GeneralChatPanel: FC<{
       }
     }
 
-    // Build script that finds input, inserts text, and clicks send — all in one executeJavaScript call
-    const buildInsertAndSendScript = (prompt: string) => {
-      // Escape the prompt for safe embedding in JS string
+    // 3. Read image files as ArrayBuffer for clipboard IPC
+    const imageBuffers: ArrayBuffer[] = []
+    for (const imgFile of imageFiles) {
+      try {
+        const buffer = await imgFile.arrayBuffer()
+        imageBuffers.push(buffer)
+      } catch (err) {
+        console.error('Failed to read image file:', imgFile.name, err)
+      }
+    }
+
+    // Script to focus the chatbot's input element
+    const buildFocusScript = () => `
+      (function() {
+        var selectors = [
+          '#prompt-textarea',
+          'textarea[placeholder*="message"]',
+          'textarea[placeholder*="Message"]',
+          'textarea[placeholder*="chat"]',
+          'textarea[placeholder*="Chat"]',
+          'textarea[placeholder*="问"]',
+          'textarea[placeholder*="聊"]',
+          'textarea[placeholder*="输入"]',
+          'textarea[placeholder*="Ask"]',
+          'div[contenteditable="true"][role="textbox"]',
+          'p[contenteditable="true"]',
+          '[contenteditable="true"]',
+          '[role="textbox"]',
+          'textarea',
+          'input[type="text"]'
+        ];
+        for (var i = 0; i < selectors.length; i++) {
+          var el = document.querySelector(selectors[i]);
+          if (el && el.offsetHeight > 0) {
+            el.focus();
+            return true;
+          }
+        }
+        return false;
+      })()
+    `
+
+    // Build script that finds input and inserts text
+    const buildInsertTextScript = (prompt: string) => {
       const escaped = prompt
         .replace(/\\/g, '\\\\')
         .replace(/'/g, "\\'")
@@ -127,7 +168,6 @@ const GeneralChatPanel: FC<{
         (function() {
           var text = '${escaped}';
           
-          // Find the input element
           var selectors = [
             '#prompt-textarea',
             'textarea[placeholder*="message"]',
@@ -156,13 +196,9 @@ const GeneralChatPanel: FC<{
           }
           
           if (!el) return 'no-input-found';
-          
           el.focus();
           
-          // Insert text based on element type
           if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-            // For native input/textarea elements
-            // Try using native setter to bypass React's controlled component
             var nativeSetter = Object.getOwnPropertyDescriptor(
               window.HTMLTextAreaElement.prototype, 'value'
             );
@@ -176,17 +212,12 @@ const GeneralChatPanel: FC<{
             } else {
               el.value = text;
             }
-            // Dispatch events to notify React/Vue/Angular
             el.dispatchEvent(new Event('input', { bubbles: true }));
             el.dispatchEvent(new Event('change', { bubbles: true }));
           } else {
-            // For contenteditable elements (e.g. ChatGPT uses <div contenteditable>)
             el.focus();
-            // Clear existing content
             el.innerHTML = '';
-            // Use execCommand for contenteditable
             document.execCommand('insertText', false, text);
-            // Also dispatch input event
             el.dispatchEvent(new Event('input', { bubbles: true }));
           }
           
@@ -197,7 +228,6 @@ const GeneralChatPanel: FC<{
 
     const buildSendScript = () => `
       (function() {
-        // Try to find and click the send button
         var btnSelectors = [
           'button[data-testid="send-button"]',
           'button[aria-label*="Send"]',
@@ -222,19 +252,16 @@ const GeneralChatPanel: FC<{
           } catch(e) {}
         }
         
-        // Fallback: look for send button near the active element
         if (!sendBtn) {
           var activeEl = document.activeElement;
           if (activeEl) {
             var container = activeEl.closest('form') || activeEl.parentElement;
-            // Walk up to find a reasonable container
             for (var j = 0; j < 5 && container; j++) {
               var buttons = container.querySelectorAll('button');
               for (var k = 0; k < buttons.length; k++) {
                 var b = buttons[k];
                 var rect = b.getBoundingClientRect();
                 if (rect.width > 0 && rect.height > 0 && !b.disabled) {
-                  // Check if it looks like a send button (has SVG icon, or relevant text)
                   var html = (b.innerHTML || '').toLowerCase();
                   var ariaLabel = (b.getAttribute('aria-label') || '').toLowerCase();
                   if (html.includes('send') || html.includes('发送') || 
@@ -256,7 +283,6 @@ const GeneralChatPanel: FC<{
           return 'clicked-send';
         }
         
-        // Fallback: simulate Enter key press on the focused element
         if (document.activeElement) {
           var enterEvent = new KeyboardEvent('keydown', {
             key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
@@ -281,15 +307,32 @@ const GeneralChatPanel: FC<{
     for (const webview of Array.from(webviews)) {
       try {
         const wv = webview as any
+        const wcId = wv.getWebContentsId?.()
 
-        // 1. Insert text into the input
+        // Step 1: Focus the input element first
+        await wv.executeJavaScript(buildFocusScript())
+        await delay(100)
+
+        // Step 2: Upload images via Electron clipboard + paste
+        if (imageBuffers.length > 0 && window.electronAPI && wcId) {
+          for (const buffer of imageBuffers) {
+            // Write image to system clipboard via IPC
+            window.electronAPI.clipboardWriteImage(buffer)
+            await delay(100)
+            // Paste from clipboard into the webview
+            window.electronAPI.pasteToWebview(wcId)
+            await delay(500) // Wait for the paste to be processed
+          }
+        }
+
+        // Step 3: Insert text into the input
         if (finalPrompt) {
-          const insertResult = await wv.executeJavaScript(buildInsertAndSendScript(finalPrompt))
+          const insertResult = await wv.executeJavaScript(buildInsertTextScript(finalPrompt))
           console.log('Insert result:', insertResult)
           await delay(300)
         }
 
-        // 2. Click Send button
+        // Step 4: Click Send button
         const sendResult = await wv.executeJavaScript(buildSendScript())
         console.log('Send result:', sendResult)
         await delay(200)
