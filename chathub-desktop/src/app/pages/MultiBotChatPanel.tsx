@@ -115,145 +115,187 @@ const GeneralChatPanel: FC<{
       }
     }
 
-    // Script to focus the chatbot's input element
-    const focusScript = `
-      (function() {
-        const selectors = [
-          '#prompt-textarea',
-          'textarea[placeholder*="message"]',
-          'textarea[placeholder*="chat"]',
-          'textarea[placeholder*="问"]',
-          'textarea[placeholder*="聊"]',
-          'textarea[placeholder*="输入"]',
-          'textarea[placeholder*="Ask"]',
-          'textarea',
-          '[contenteditable="true"]',
-          '[role="textbox"]',
-          'input[type="text"]'
-        ];
-        for (const selector of selectors) {
-          const el = document.querySelector(selector);
-          if (el && el.offsetHeight > 0) {
-            el.focus();
-            return true;
+    // Build script that finds input, inserts text, and clicks send — all in one executeJavaScript call
+    const buildInsertAndSendScript = (prompt: string) => {
+      // Escape the prompt for safe embedding in JS string
+      const escaped = prompt
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+      return `
+        (function() {
+          var text = '${escaped}';
+          
+          // Find the input element
+          var selectors = [
+            '#prompt-textarea',
+            'textarea[placeholder*="message"]',
+            'textarea[placeholder*="Message"]',
+            'textarea[placeholder*="chat"]',
+            'textarea[placeholder*="Chat"]',
+            'textarea[placeholder*="问"]',
+            'textarea[placeholder*="聊"]',
+            'textarea[placeholder*="输入"]',
+            'textarea[placeholder*="Ask"]',
+            'div[contenteditable="true"][role="textbox"]',
+            'p[contenteditable="true"]',
+            '[contenteditable="true"]',
+            '[role="textbox"]',
+            'textarea',
+            'input[type="text"]'
+          ];
+          
+          var el = null;
+          for (var i = 0; i < selectors.length; i++) {
+            var found = document.querySelector(selectors[i]);
+            if (found && found.offsetHeight > 0) {
+              el = found;
+              break;
+            }
           }
-        }
-        return false;
-      })()
-    `
+          
+          if (!el) return 'no-input-found';
+          
+          el.focus();
+          
+          // Insert text based on element type
+          if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+            // For native input/textarea elements
+            // Try using native setter to bypass React's controlled component
+            var nativeSetter = Object.getOwnPropertyDescriptor(
+              window.HTMLTextAreaElement.prototype, 'value'
+            );
+            if (el.tagName === 'INPUT') {
+              nativeSetter = Object.getOwnPropertyDescriptor(
+                window.HTMLInputElement.prototype, 'value'
+              );
+            }
+            if (nativeSetter && nativeSetter.set) {
+              nativeSetter.set.call(el, text);
+            } else {
+              el.value = text;
+            }
+            // Dispatch events to notify React/Vue/Angular
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+            // For contenteditable elements (e.g. ChatGPT uses <div contenteditable>)
+            el.focus();
+            // Clear existing content
+            el.innerHTML = '';
+            // Use execCommand for contenteditable
+            document.execCommand('insertText', false, text);
+            // Also dispatch input event
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          
+          return 'text-inserted';
+        })()
+      `
+    }
 
-    // Script to trigger click on send button
-    const sendScript = `
+    const buildSendScript = () => `
       (function() {
-        let sendBtn = null;
-        const btnSelectors = [
+        // Try to find and click the send button
+        var btnSelectors = [
           'button[data-testid="send-button"]',
           'button[aria-label*="Send"]',
+          'button[aria-label*="send"]',
           'button[aria-label*="发送"]',
           'button[aria-label*="submit"]',
-          'button[type="submit"]',
+          'button[aria-label*="Submit"]',
+          'form button[type="submit"]',
           'button.send-button',
-          '[class*="send"] button',
-          'button[class*="send"]'
+          'button[class*="send" i]',
+          '[data-testid*="send"]'
         ];
-
-        for (const sel of btnSelectors) {
-          const btn = document.querySelector(sel);
-          if (btn && !btn.disabled && btn.offsetHeight > 0) {
-            sendBtn = btn;
-            break;
-          }
+        
+        var sendBtn = null;
+        for (var i = 0; i < btnSelectors.length; i++) {
+          try {
+            var btn = document.querySelector(btnSelectors[i]);
+            if (btn && btn.offsetHeight > 0) {
+              sendBtn = btn;
+              break;
+            }
+          } catch(e) {}
         }
-
+        
+        // Fallback: look for send button near the active element
         if (!sendBtn) {
-          const activeEl = document.activeElement;
+          var activeEl = document.activeElement;
           if (activeEl) {
-            const container = activeEl.closest('form') || activeEl.parentElement?.parentElement;
-            if (container) {
-              const buttons = Array.from(container.querySelectorAll('button'));
-              sendBtn = buttons.find(b => {
-                const rect = b.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0 && !b.disabled && (
-                  b.querySelector('svg') || 
-                  b.innerHTML.includes('send') || 
-                  b.innerHTML.includes('发送') ||
-                  b.getAttribute('type') === 'submit'
-                );
-              }) || buttons[buttons.length - 1];
+            var container = activeEl.closest('form') || activeEl.parentElement;
+            // Walk up to find a reasonable container
+            for (var j = 0; j < 5 && container; j++) {
+              var buttons = container.querySelectorAll('button');
+              for (var k = 0; k < buttons.length; k++) {
+                var b = buttons[k];
+                var rect = b.getBoundingClientRect();
+                if (rect.width > 0 && rect.height > 0 && !b.disabled) {
+                  // Check if it looks like a send button (has SVG icon, or relevant text)
+                  var html = (b.innerHTML || '').toLowerCase();
+                  var ariaLabel = (b.getAttribute('aria-label') || '').toLowerCase();
+                  if (html.includes('send') || html.includes('发送') || 
+                      ariaLabel.includes('send') || ariaLabel.includes('发送') ||
+                      b.querySelector('svg')) {
+                    sendBtn = b;
+                    break;
+                  }
+                }
+              }
+              if (sendBtn) break;
+              container = container.parentElement;
             }
           }
         }
-
+        
         if (sendBtn && !sendBtn.disabled) {
           sendBtn.click();
-          return true;
-        } else if (document.activeElement) {
-          const enterDown = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
-          document.activeElement.dispatchEvent(enterDown);
-          return true;
+          return 'clicked-send';
         }
-        return false;
+        
+        // Fallback: simulate Enter key press on the focused element
+        if (document.activeElement) {
+          var enterEvent = new KeyboardEvent('keydown', {
+            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+            bubbles: true, cancelable: true
+          });
+          document.activeElement.dispatchEvent(enterEvent);
+          var enterUp = new KeyboardEvent('keyup', {
+            key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+            bubbles: true, cancelable: true
+          });
+          document.activeElement.dispatchEvent(enterUp);
+          return 'pressed-enter';
+        }
+        
+        return 'no-send-found';
       })()
     `
 
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
-
-    // Save current clipboard contents to restore later
-    let originalClipboardItems: any[] = []
-    try {
-      originalClipboardItems = await navigator.clipboard.read()
-    } catch (e) {
-      // Ignored if empty or unsupported
-    }
 
     // Process each webview sequentially
     for (const webview of Array.from(webviews)) {
       try {
         const wv = webview as any
 
-        // 1. Focus the input in guest page
-        await wv.executeJavaScript(focusScript)
-        await delay(50)
-
-        // 2. Paste images
-        for (const imgFile of imageFiles) {
-          try {
-            const buffer = await imgFile.arrayBuffer()
-            const blob = new Blob([buffer], { type: imgFile.type })
-            await navigator.clipboard.write([
-              new ClipboardItem({ [imgFile.type]: blob })
-            ])
-            await delay(50)
-            wv.paste()
-            await delay(150)
-          } catch (err) {
-            console.error('Failed to write image to clipboard:', err)
-          }
-        }
-
-        // 3. Paste prompt text
+        // 1. Insert text into the input
         if (finalPrompt) {
-          await navigator.clipboard.writeText(finalPrompt)
-          await delay(50)
-          wv.paste()
-          await delay(100)
+          const insertResult = await wv.executeJavaScript(buildInsertAndSendScript(finalPrompt))
+          console.log('Insert result:', insertResult)
+          await delay(300)
         }
 
-        // 4. Click Send
-        await wv.executeJavaScript(sendScript)
-        await delay(100)
+        // 2. Click Send button
+        const sendResult = await wv.executeJavaScript(buildSendScript())
+        console.log('Send result:', sendResult)
+        await delay(200)
       } catch (err) {
         console.error('Failed to broadcast to webview:', err)
       }
-    }
-
-    // Restore original clipboard items
-    try {
-      if (originalClipboardItems.length > 0) {
-        await navigator.clipboard.write(originalClipboardItems)
-      }
-    } catch (e) {
-      // Ignored
     }
   }, [])
 
