@@ -428,8 +428,8 @@ const GeneralChatPanel: FC<{
 
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-    // Process each webview sequentially
-    for (const webview of Array.from(webviews)) {
+    // Process each webview simultaneously
+    const promises = Array.from(webviews).map(async (webview) => {
       try {
         const wv = webview as any
         
@@ -463,7 +463,9 @@ const GeneralChatPanel: FC<{
       } catch (err) {
         console.error('Failed to broadcast to webview:', err)
       }
-    }
+    })
+
+    await Promise.all(promises)
   }, [])
 
   return (
