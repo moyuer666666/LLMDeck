@@ -20,7 +20,7 @@ const SingleBotChatPanel: FC<Props> = ({ botId }) => {
         src={botConfig.url}
         className="w-full h-full border-0"
         allowpopups={true}
-        useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (ChatHub)"
+        useragent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (LLMDeck)"
       />
     </div>
   )

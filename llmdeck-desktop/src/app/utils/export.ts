@@ -4,7 +4,7 @@ import Browser from 'webextension-polyfill'
 export async function exportData() {
   const syncData = await Browser.storage.sync.get(null)
   const blob = new Blob([JSON.stringify(syncData)], { type: 'application/json' })
-  await fileSave(blob, { fileName: 'chathub-settings.json' })
+  await fileSave(blob, { fileName: 'llmdeck-settings.json' })
 }
 
 export async function importData() {

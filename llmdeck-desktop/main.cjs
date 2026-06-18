@@ -1,6 +1,10 @@
 const { app, BrowserWindow, session, Menu, MenuItem, ipcMain, clipboard, nativeImage, webContents } = require('electron')
 const path = require('path')
 
+const APP_ID = 'com.llmdeck.desktop'
+const APP_NAME = 'LLMDeck'
+const USER_AGENT_MARKER = 'LLMDeck'
+
 // Get localized labels for context menu items
 function getContextMenuLabels() {
   const locale = app.getLocale() || 'en'
@@ -22,8 +26,13 @@ function getContextMenuLabels() {
 // Enable webview tag
 console.log('--- Electron Main Process Starting ---')
 
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (ChatHub)'
+const USER_AGENT = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (${USER_AGENT_MARKER})`
 const isDev = !app.isPackaged
+
+app.setName(APP_NAME)
+if (process.platform === 'win32') {
+  app.setAppUserModelId(APP_ID)
+}
 
 // Register IPC handlers (must be registered once, outside createWindow)
 // Write an image (as Buffer) to the system clipboard — async/awaitable
@@ -72,6 +81,7 @@ function createWindow() {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
