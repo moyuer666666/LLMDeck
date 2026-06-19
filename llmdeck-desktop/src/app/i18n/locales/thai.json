@@ -69,5 +69,9 @@
   "Move right": "ย้ายไปทางขวา",
   "Exit focus": "ออกจากโหมดโฟกัส",
   "Focus this bot": "โฟกัสบอทนี้",
-  "Remove session": "ลบเซสชัน"
+  "Remove session": "ลบเซสชัน",
+  "Updates": "อัปเดต",
+  "Current version": "เวอร์ชันปัจจุบัน",
+  "Check for updates": "ตรวจสอบอัปเดต",
+  "Failed to open update page": "ไม่สามารถเปิดหน้าอัปเดตได้"
 }

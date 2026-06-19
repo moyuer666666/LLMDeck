@@ -76,5 +76,9 @@
   "Move right": "右へ移動",
   "Exit focus": "フォーカスを終了",
   "Focus this bot": "このボットにフォーカス",
-  "Remove session": "セッションを削除"
+  "Remove session": "セッションを削除",
+  "Updates": "アップデート",
+  "Current version": "現在のバージョン",
+  "Check for updates": "更新を確認",
+  "Failed to open update page": "更新ページを開けませんでした"
 }

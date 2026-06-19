@@ -54,5 +54,6 @@ interface Window {
     clipboardWriteImage: (imageBuffer: ArrayBuffer | Uint8Array) => Promise<{ success: boolean; error?: string }>
     clipboardWriteText: (text: string) => Promise<{ success: boolean; error?: string }>
     pasteToWebview: (webContentsId: number) => Promise<{ success: boolean; error?: string }>
+    openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
   }
 }

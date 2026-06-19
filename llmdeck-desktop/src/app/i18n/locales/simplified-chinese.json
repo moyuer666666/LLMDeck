@@ -76,5 +76,9 @@
   "Move right": "向右移动",
   "Exit focus": "退出聚焦",
   "Focus this bot": "聚焦此机器人",
-  "Remove session": "删除会话"
+  "Remove session": "删除会话",
+  "Updates": "版本更新",
+  "Current version": "当前版本",
+  "Check for updates": "检查更新",
+  "Failed to open update page": "无法打开更新页面"
 }

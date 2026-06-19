@@ -1,4 +1,4 @@
-const { app, BrowserWindow, session, Menu, MenuItem, ipcMain, clipboard, nativeImage, webContents } = require('electron')
+const { app, BrowserWindow, session, Menu, MenuItem, ipcMain, clipboard, nativeImage, webContents, shell } = require('electron')
 const path = require('path')
 
 const APP_ID = 'com.llmdeck.desktop'
@@ -72,6 +72,20 @@ ipcMain.handle('clipboard-write-text', async (event, text) => {
     return { success: true }
   } catch (err) {
     console.error('Failed to write text to clipboard:', err)
+    return { success: false, error: err.message }
+  }
+})
+
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    const parsedUrl = new URL(url)
+    if (!['https:', 'http:'].includes(parsedUrl.protocol)) {
+      return { success: false, error: 'Unsupported URL protocol' }
+    }
+    await shell.openExternal(parsedUrl.toString())
+    return { success: true }
+  } catch (err) {
+    console.error('Failed to open external URL:', err)
     return { success: false, error: err.message }
   }
 })

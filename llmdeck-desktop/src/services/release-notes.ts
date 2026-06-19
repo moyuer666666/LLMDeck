@@ -4,7 +4,7 @@ import { getVersion } from '~utils'
 
 const RELEASE_NOTES = [
   {
-    version: '1.0.1-web',
+    version: '1.0.1',
     notes: ['你好'],
   },
 ]

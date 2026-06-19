@@ -69,5 +69,9 @@
   "Move right": "Mover a la derecha",
   "Exit focus": "Salir del enfoque",
   "Focus this bot": "Enfocar este bot",
-  "Remove session": "Eliminar sesión"
+  "Remove session": "Eliminar sesión",
+  "Updates": "Actualizaciones",
+  "Current version": "Versión actual",
+  "Check for updates": "Buscar actualizaciones",
+  "Failed to open update page": "No se pudo abrir la página de actualización"
 }

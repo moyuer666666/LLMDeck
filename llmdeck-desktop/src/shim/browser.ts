@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import packageJson from '../../package.json'
 
 export namespace Runtime {
   export interface MessageSender {
@@ -131,7 +132,7 @@ export const storage = {
 
 export const runtime = {
   getURL: (path: string) => path,
-  getManifest: () => ({ version: '1.0.0-web' }),
+  getManifest: () => ({ version: packageJson.version }),
   onMessage: {
     addListener: (callback: (message: any, sender: Runtime.MessageSender, sendResponse: (response?: any) => void) => void | boolean | Promise<any>) => {},
     removeListener: (callback: (message: any, sender: Runtime.MessageSender, sendResponse: (response?: any) => void) => void | boolean | Promise<any>) => {},

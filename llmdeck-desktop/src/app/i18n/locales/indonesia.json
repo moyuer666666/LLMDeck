@@ -69,5 +69,9 @@
   "Move right": "Pindah ke kanan",
   "Exit focus": "Keluar dari fokus",
   "Focus this bot": "Fokus pada bot ini",
-  "Remove session": "Hapus sesi"
+  "Remove session": "Hapus sesi",
+  "Updates": "Pembaruan",
+  "Current version": "Versi saat ini",
+  "Check for updates": "Periksa pembaruan",
+  "Failed to open update page": "Gagal membuka halaman pembaruan"
 }

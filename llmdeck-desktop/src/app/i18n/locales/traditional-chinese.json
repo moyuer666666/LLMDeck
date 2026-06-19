@@ -69,5 +69,9 @@
   "Move right": "向右移動",
   "Exit focus": "退出聚焦",
   "Focus this bot": "聚焦此機器人",
-  "Remove session": "刪除會話"
+  "Remove session": "刪除會話",
+  "Updates": "版本更新",
+  "Current version": "目前版本",
+  "Check for updates": "檢查更新",
+  "Failed to open update page": "無法開啟更新頁面"
 }
