@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { useAtom, useAtomValue } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
 import { FC, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { FiPlus } from 'react-icons/fi'
@@ -9,8 +9,6 @@ import SyncInputBox from '~app/components/Chat/SyncInputBox'
 import Dialog from '~app/components/Dialog'
 import { Layout } from '~app/consts'
 import { useEnabledBots } from '~app/hooks/use-enabled-bots'
-import { usePremium } from '~app/hooks/use-premium'
-import { showPremiumModalAtom } from '~app/state'
 import { getUserConfig } from '~services/user-config'
 import { BotId } from '../bots'
 import ConversationPanel from '../components/Chat/ConversationPanel'
@@ -96,16 +94,6 @@ const GeneralChatPanel: FC<{
   const isScrollableBotLayout = supportImageInput === true
   const canMoveBots = isScrollableBotLayout && !!setBots && botIds.length > 1
   const chatbots = useEnabledBots()
-
-  const setPremiumModalOpen = useSetAtom(showPremiumModalAtom)
-  const premiumState = usePremium()
-  const disabled = useMemo(() => !premiumState.isLoading && !premiumState.activated, [premiumState])
-
-  useEffect(() => {
-    if (disabled && (botIds.length > 2 || supportImageInput)) {
-      setPremiumModalOpen('all-in-one-layout')
-    }
-  }, [botIds.length, disabled, setPremiumModalOpen, supportImageInput])
 
   // Toggle input bar via Ctrl + ` shortcut
   useEffect(() => {

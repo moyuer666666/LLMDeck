@@ -1,11 +1,9 @@
-import { Link } from '@tanstack/react-router'
 import { cx } from '~/utils'
 import { useAtom } from 'jotai'
 import { ComponentPropsWithoutRef, FC, useCallback, useEffect, useMemo, useState } from 'react'
 import { ColorResult, TwitterPicker } from 'react-color'
 import { useTranslation } from 'react-i18next'
 import Browser from 'webextension-polyfill'
-import { usePremium } from '~app/hooks/use-premium'
 import { followArcThemeAtom, themeColorAtom } from '~app/state'
 import { applyThemeMode } from '~app/utils/color-scheme'
 import { isArcBrowser } from '~app/utils/env'
@@ -51,7 +49,6 @@ const ThemeSettingModal: FC<Props> = (props) => {
   const { t, i18n } = useTranslation()
   const [themeColor, setThemeColor] = useAtom(themeColorAtom)
   const [themeMode, setThemeMode] = useState(getUserThemeMode())
-  const premiumState = usePremium()
   const [followArcTheme, setFollowArcTheme] = useAtom(followArcThemeAtom)
   const [zoomLevel, setZoomLevel] = useState<number | null>(null)
   const [lang, setLang] = useState(() => getLanguage() || 'auto')
@@ -134,19 +131,9 @@ const ThemeSettingModal: FC<Props> = (props) => {
         </div>
         <div>
           <p className="font-bold text-lg mb-3">
-            {t('Theme Color')}{' '}
-            {!premiumState.activated && (
-              <Link
-                to="/premium"
-                search={{ source: 'theme' }}
-                className="text-sm font-normal ml-1 underline italic"
-                onClick={() => props.onClose()}
-              >
-                ({t('Premium Feature')})
-              </Link>
-            )}
+            {t('Theme Color')}
           </p>
-          <div className={cx('flex flex-col gap-3', !premiumState.activated && 'opacity-50 pointer-events-none')}>
+          <div className="flex flex-col gap-3">
             {isArcBrowser() && (
               <div className="flex flex-row items-center gap-2">
                 <input
@@ -154,7 +141,6 @@ const ThemeSettingModal: FC<Props> = (props) => {
                   id="arc-theme-check"
                   checked={followArcTheme}
                   onChange={(e) => setFollowArcTheme(e.target.checked)}
-                  disabled={!premiumState.activated}
                 />
                 <label htmlFor="arc-theme-check">{t('Follow Arc browser theme')}</label>
               </div>

@@ -2,7 +2,6 @@ import { createHashHistory, createRootRoute, createRoute, createRouter, useParam
 import { BotId } from './bots'
 import Layout from './components/Layout'
 import MultiBotChatPanel from './pages/MultiBotChatPanel'
-import PremiumPage from './pages/PremiumPage'
 import SettingPage from './pages/SettingPage'
 import SingleBotChatPanel from './pages/SingleBotChatPanel'
 
@@ -37,18 +36,7 @@ const settingRoute = createRoute({
   component: SettingPage,
 })
 
-export const premiumRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: 'premium',
-  component: PremiumPage,
-  validateSearch: (search: Record<string, unknown>) => {
-    return {
-      source: search.source as string | undefined,
-    }
-  },
-})
-
-const routeTree = rootRoute.addChildren([layoutRoute.addChildren([indexRoute, chatRoute, settingRoute, premiumRoute])])
+const routeTree = rootRoute.addChildren([layoutRoute.addChildren([indexRoute, chatRoute, settingRoute])])
 
 const hashHistory = createHashHistory()
 const router = createRouter({ routeTree, history: hashHistory })
