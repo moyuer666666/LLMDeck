@@ -1,5 +1,6 @@
 import { FC, useState, useEffect, useRef } from 'react'
 import { FiEdit, FiPaperclip, FiX, FiFileText } from 'react-icons/fi'
+import { useTranslation } from 'react-i18next'
 import LayoutSwitch from './LayoutSwitch'
 import { Layout } from '~app/consts'
 import { cx } from '~/utils'
@@ -12,6 +13,7 @@ interface Props {
 }
 
 const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) => {
+  const { t } = useTranslation()
   const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -130,7 +132,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
           <button
             onClick={onNewChat}
             className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors mb-0.5 shrink-0"
-            title="New conversation for all AI"
+            title={t('New conversation for all AI')}
           >
             <FiEdit className="w-5 h-5" />
           </button>
@@ -143,7 +145,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Use / to select prompts, Shift+Enter to add new line"
+            placeholder={t('Use / to select prompts, Shift+Enter to add new line')}
             className="grow self-center bg-transparent border-0 resize-none outline-none text-sm leading-6 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans min-h-[24px] max-h-[120px] py-0"
           />
 
@@ -160,7 +162,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
           <button
             onClick={triggerFileSelect}
             className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors mb-0.5"
-            title="Attach files or images"
+            title={t('Attach files or images')}
           >
             <FiPaperclip className="w-5 h-5" />
           </button>
@@ -176,7 +178,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
                 : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed',
             )}
           >
-            Send
+            {t('Send')}
           </button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { getFaviconUrl, uuid } from '~/utils'
 import { Input } from '../Input'
 import Button from '../Button'
 import { FiEdit2, FiTrash2, FiPlus, FiCheck, FiX } from 'react-icons/fi'
+import { useTranslation } from 'react-i18next'
 
 interface Props {
   userConfig: UserConfig
@@ -11,6 +12,7 @@ interface Props {
 }
 
 const EnabledBotsSettings: FC<Props> = ({ userConfig, updateConfigValue }) => {
+  const { t } = useTranslation()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editUrl, setEditUrl] = useState('')
@@ -107,14 +109,14 @@ const EnabledBotsSettings: FC<Props> = ({ userConfig, updateConfigValue }) => {
                     <button
                       onClick={saveEdit}
                       className="p-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition"
-                      title="保存"
+                      title={t('Save')}
                     >
                       <FiCheck size={16} />
                     </button>
                     <button
                       onClick={cancelEdit}
                       className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition"
-                      title="取消"
+                      title={t('Cancel')}
                     >
                       <FiX size={16} />
                     </button>
@@ -139,14 +141,14 @@ const EnabledBotsSettings: FC<Props> = ({ userConfig, updateConfigValue }) => {
                     <button
                       onClick={() => startEdit(bot)}
                       className="p-2 hover:bg-secondary hover:bg-opacity-20 text-primary-text rounded-md transition"
-                      title="编辑"
+                      title={t('Edit')}
                     >
                       <FiEdit2 size={16} />
                     </button>
                     <button
                       onClick={() => deleteBot(bot.id)}
                       className="p-2 hover:bg-red-500 hover:text-white text-red-400 rounded-md transition"
-                      title="删除"
+                      title={t('Delete')}
                     >
                       <FiTrash2 size={16} />
                     </button>

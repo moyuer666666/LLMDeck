@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { FC } from 'react'
 import { FiChevronLeft, FiChevronRight, FiGrid, FiMaximize2, FiMinimize2, FiX } from 'react-icons/fi'
+import { useTranslation } from 'react-i18next'
 import { cx, getFaviconUrl } from '~/utils'
 import { useEnabledBots } from '~app/hooks/use-enabled-bots'
 import { BotId } from '../../bots'
@@ -22,6 +23,7 @@ interface Props {
 }
 
 const ConversationPanel: FC<Props> = (props) => {
+  const { t } = useTranslation()
   const chatbots = useEnabledBots()
   const botInfo = chatbots.find((b) => b.id === props.botId)
   const mode = props.mode || 'full'
@@ -57,7 +59,7 @@ const ConversationPanel: FC<Props> = (props) => {
             {props.onOverviewToggle && (
               <button
                 type="button"
-                title={props.overview ? 'Exit overview' : 'View all sessions'}
+                title={props.overview ? t('Exit overview') : t('View all sessions')}
                 className={cx(
                   'shrink-0 p-1 rounded-md text-light-text hover:text-primary-text hover:bg-secondary transition-colors',
                   props.overview && 'text-primary-text bg-secondary',
@@ -71,7 +73,7 @@ const ConversationPanel: FC<Props> = (props) => {
               <>
                 <button
                   type="button"
-                  title="Move left"
+                  title={t('Move left')}
                   disabled={!props.canMoveLeft}
                   className={cx(
                     'shrink-0 p-1 rounded-md transition-colors',
@@ -85,7 +87,7 @@ const ConversationPanel: FC<Props> = (props) => {
                 </button>
                 <button
                   type="button"
-                  title="Move right"
+                  title={t('Move right')}
                   disabled={!props.canMoveRight}
                   className={cx(
                     'shrink-0 p-1 rounded-md transition-colors',
@@ -102,7 +104,7 @@ const ConversationPanel: FC<Props> = (props) => {
             {props.onFocusToggle && (
               <button
                 type="button"
-                title={props.focused ? 'Exit focus' : 'Focus this bot'}
+                title={props.focused ? t('Exit focus') : t('Focus this bot')}
                 className="shrink-0 p-1 rounded-md text-light-text hover:text-primary-text hover:bg-secondary transition-colors"
                 onClick={props.onFocusToggle}
               >
@@ -112,7 +114,7 @@ const ConversationPanel: FC<Props> = (props) => {
             {props.onRemove && (
               <button
                 type="button"
-                title="Remove session"
+                title={t('Remove session')}
                 className="shrink-0 p-1 rounded-md text-light-text hover:text-red-500 hover:bg-secondary transition-colors"
                 onClick={props.onRemove}
               >

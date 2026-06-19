@@ -59,5 +59,15 @@
   "Display": "顯示",
   "Display Settings": "顯示設置",
   "Auto": "自動",
-  "Language": "語言"
+  "Language": "語言",
+  "Delete": "刪除",
+  "New conversation for all AI": "為所有 AI 建立新對話",
+  "Attach files or images": "附加檔案或圖片",
+  "Exit overview": "退出總覽",
+  "View all sessions": "查看所有會話",
+  "Move left": "向左移動",
+  "Move right": "向右移動",
+  "Exit focus": "退出聚焦",
+  "Focus this bot": "聚焦此機器人",
+  "Remove session": "刪除會話"
 }

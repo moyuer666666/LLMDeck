@@ -59,5 +59,15 @@
   "Display": "Tampilan",
   "Display Settings": "Pengaturan tampilan",
   "Auto": "Otomatis",
-  "Language": "Bahasa"
+  "Language": "Bahasa",
+  "Delete": "Hapus",
+  "New conversation for all AI": "Percakapan baru untuk semua AI",
+  "Attach files or images": "Lampirkan file atau gambar",
+  "Exit overview": "Keluar dari ringkasan",
+  "View all sessions": "Lihat semua sesi",
+  "Move left": "Pindah ke kiri",
+  "Move right": "Pindah ke kanan",
+  "Exit focus": "Keluar dari fokus",
+  "Focus this bot": "Fokus pada bot ini",
+  "Remove session": "Hapus sesi"
 }

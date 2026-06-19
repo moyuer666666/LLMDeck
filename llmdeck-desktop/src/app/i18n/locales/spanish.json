@@ -59,5 +59,15 @@
   "Display": "Mostrar",
   "Display Settings": "Configuración de pantalla",
   "Auto": "Automático",
-  "Language": "Idioma"
+  "Language": "Idioma",
+  "Delete": "Eliminar",
+  "New conversation for all AI": "Nueva conversación para todas las IA",
+  "Attach files or images": "Adjuntar archivos o imágenes",
+  "Exit overview": "Salir de la vista general",
+  "View all sessions": "Ver todas las sesiones",
+  "Move left": "Mover a la izquierda",
+  "Move right": "Mover a la derecha",
+  "Exit focus": "Salir del enfoque",
+  "Focus this bot": "Enfocar este bot",
+  "Remove session": "Eliminar sesión"
 }

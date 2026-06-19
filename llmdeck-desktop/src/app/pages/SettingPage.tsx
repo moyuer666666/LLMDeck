@@ -14,7 +14,6 @@ import {
   getUserConfig,
   updateUserConfig,
 } from '~services/user-config'
-import { getVersion } from '~utils'
 import PagePanel from '../components/Page'
 
 function SettingPage() {
@@ -56,7 +55,7 @@ function SettingPage() {
   }
 
   return (
-    <PagePanel title={`${t('Settings')} (v${getVersion()})`}>
+    <PagePanel title={t('Settings')}>
       <div className="flex flex-col gap-5 mt-3 mb-10 px-10">
         <div>
           <p className="font-bold mb-2 text-lg">{t('Startup page')}</p>

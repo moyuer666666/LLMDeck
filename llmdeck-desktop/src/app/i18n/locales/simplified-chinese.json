@@ -66,5 +66,15 @@
   "Login to Bard": "登录Bard",
   "Recent Updates": "最近更新",
   "Added a separate Gemini Pro bot, can be enabled in the settings": "添加了Gemini Pro，可在设置中启用",
-  "Save changes": "保存更改"
+  "Save changes": "保存更改",
+  "Delete": "删除",
+  "New conversation for all AI": "为所有 AI 新建对话",
+  "Attach files or images": "附加文件或图片",
+  "Exit overview": "退出总览",
+  "View all sessions": "查看所有会话",
+  "Move left": "向左移动",
+  "Move right": "向右移动",
+  "Exit focus": "退出聚焦",
+  "Focus this bot": "聚焦此机器人",
+  "Remove session": "删除会话"
 }

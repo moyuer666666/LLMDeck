@@ -59,5 +59,15 @@
   "Display": "แสดง",
   "Display Settings": "การตั้งค่าการแสดงผล",
   "Auto": "อัตโนมัติ",
-  "Language": "ภาษา"
+  "Language": "ภาษา",
+  "Delete": "ลบ",
+  "New conversation for all AI": "เริ่มบทสนทนาใหม่สำหรับ AI ทั้งหมด",
+  "Attach files or images": "แนบไฟล์หรือรูปภาพ",
+  "Exit overview": "ออกจากภาพรวม",
+  "View all sessions": "ดูเซสชันทั้งหมด",
+  "Move left": "ย้ายไปทางซ้าย",
+  "Move right": "ย้ายไปทางขวา",
+  "Exit focus": "ออกจากโหมดโฟกัส",
+  "Focus this bot": "โฟกัสบอทนี้",
+  "Remove session": "ลบเซสชัน"
 }
