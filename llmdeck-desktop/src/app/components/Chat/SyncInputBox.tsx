@@ -144,7 +144,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder="Use / to select prompts, Shift+Enter to add new line"
-            className="grow bg-transparent border-0 resize-none outline-none text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans min-h-[24px] max-h-[120px] py-0.5"
+            className="grow self-center bg-transparent border-0 resize-none outline-none text-sm leading-6 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans min-h-[24px] max-h-[120px] py-0"
           />
 
           {/* Hidden File Input */}

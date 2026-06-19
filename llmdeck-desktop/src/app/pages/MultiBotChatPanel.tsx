@@ -1,10 +1,12 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import { sample } from 'lodash-es'
 import { FC, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
-import { cx } from '~/utils'
+import { FiPlus } from 'react-icons/fi'
+import toast, { Toaster } from 'react-hot-toast'
+import { cx, getFaviconUrl } from '~/utils'
 import SyncInputBox from '~app/components/Chat/SyncInputBox'
+import Dialog from '~app/components/Dialog'
 import { Layout } from '~app/consts'
 import { useEnabledBots } from '~app/hooks/use-enabled-bots'
 import { usePremium } from '~app/hooks/use-premium'
@@ -18,32 +20,82 @@ const twoPanelBotsAtom = atomWithStorage<BotId[]>('multiPanelBots:2', ['gemini',
 const threePanelBotsAtom = atomWithStorage<BotId[]>('multiPanelBots:3', ['gemini', 'claude', 'chatgpt'])
 const fourPanelBotsAtom = atomWithStorage<BotId[]>('multiPanelBots:4', ['gemini', 'claude', 'chatgpt'])
 const sixPanelBotsAtom = atomWithStorage<BotId[]>('multiPanelBots:6', ['gemini', 'claude', 'chatgpt'])
+const imageInputBotsAtom = atomWithStorage<BotId[]>('multiPanelBots:imageInput', [])
+const imageInputBotsInitializedAtom = atomWithStorage<boolean>('multiPanelBots:imageInput:initialized', false)
 
-const useActiveBots = (bots: string[], count: number) => {
+const useActiveBots = (bots: string[], count?: number) => {
   const chatbots = useEnabledBots()
   const chatbotIds = useMemo(() => chatbots.map((b) => b.id), [chatbots])
 
   return useMemo(() => {
     if (chatbotIds.length === 0) return []
+    const targetCount = count ?? chatbotIds.length
     let result = bots.filter((id) => chatbotIds.includes(id))
-    if (result.length < count) {
+    if (result.length < targetCount) {
       const remaining = chatbotIds.filter((id) => !result.includes(id))
-      result = [...result, ...remaining].slice(0, count)
+      result = [...result, ...remaining].slice(0, targetCount)
     }
-    while (result.length < count && chatbotIds.length > 0) {
+    while (count !== undefined && result.length < targetCount && chatbotIds.length > 0) {
       result.push(chatbotIds[0])
     }
     return result
   }, [bots, chatbotIds, count])
 }
 
+const AddSessionButton: FC<{
+  chatbots: Array<{ id: BotId; name: string; url: string }>
+  onAdd: (botId: BotId) => void
+}> = ({ chatbots, onAdd }) => {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="h-full min-h-[160px]">
+      <button
+        type="button"
+        className="w-full h-full rounded-2xl border border-dashed border-primary-border bg-primary-background text-light-text hover:text-primary-text hover:bg-secondary transition-colors flex flex-col items-center justify-center gap-2"
+        onClick={() => setOpen(true)}
+      >
+        <FiPlus className="w-6 h-6" />
+        <span className="text-sm font-medium">添加会话</span>
+      </button>
+      <Dialog title="添加会话" open={open} onClose={() => setOpen(false)} className="w-[320px]">
+        <div className="py-2 max-h-[360px] overflow-y-auto">
+          {chatbots.map((bot) => (
+            <button
+              type="button"
+              key={bot.id}
+              className="w-full px-5 py-3 text-secondary-text hover:text-white hover:bg-primary-blue cursor-pointer flex flex-row items-center gap-3"
+              onClick={() => {
+                onAdd(bot.id)
+                setOpen(false)
+              }}
+            >
+              <div className="w-4 h-4">
+                <img src={getFaviconUrl(bot.url)} className="w-4 h-4 rounded-sm" />
+              </div>
+              <p className="text-sm whitespace-nowrap">{bot.name}</p>
+            </button>
+          ))}
+        </div>
+      </Dialog>
+    </div>
+  )
+}
+
 const GeneralChatPanel: FC<{
   botIds: BotId[]
-  setBots?: ReturnType<typeof useSetAtom<typeof twoPanelBotsAtom>>
+  setBots?: (value: BotId[] | ((bots: BotId[]) => BotId[])) => void
   supportImageInput?: boolean
 }> = ({ botIds, setBots, supportImageInput }) => {
   const [layout, setLayout] = useAtom(layoutAtom)
   const [isInputBarOpen, setIsInputBarOpen] = useState(true)
+  const [focusedBotId, setFocusedBotId] = useState<BotId | null>(null)
+  const [isOverviewOpen, setIsOverviewOpen] = useState(false)
+  const [draggingBotId, setDraggingBotId] = useState<BotId | null>(null)
+  const [dragOverBotId, setDragOverBotId] = useState<BotId | null>(null)
+  const isScrollableBotLayout = supportImageInput === true
+  const canMoveBots = isScrollableBotLayout && !!setBots && botIds.length > 1
+  const chatbots = useEnabledBots()
 
   const setPremiumModalOpen = useSetAtom(showPremiumModalAtom)
   const premiumState = usePremium()
@@ -67,6 +119,18 @@ const GeneralChatPanel: FC<{
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  useEffect(() => {
+    if (focusedBotId && (!isScrollableBotLayout || !botIds.includes(focusedBotId))) {
+      setFocusedBotId(null)
+    }
+  }, [botIds, focusedBotId, isScrollableBotLayout])
+
+  useEffect(() => {
+    if (!isScrollableBotLayout && isOverviewOpen) {
+      setIsOverviewOpen(false)
+    }
+  }, [isOverviewOpen, isScrollableBotLayout])
+
   const onSwitchBot = useCallback(
     (botId: BotId, index: number) => {
       if (!setBots) {
@@ -86,6 +150,80 @@ const GeneralChatPanel: FC<{
       setLayout(v)
     },
     [setLayout],
+  )
+
+  const moveBot = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      if (!setBots || fromIndex === toIndex || toIndex < 0 || toIndex >= botIds.length) {
+        return
+      }
+      const nextBots = [...botIds]
+      const [movedBot] = nextBots.splice(fromIndex, 1)
+      nextBots.splice(toIndex, 0, movedBot)
+      setBots(nextBots)
+    },
+    [botIds, setBots],
+  )
+
+  const removeBot = useCallback(
+    (botId: BotId) => {
+      if (!setBots) {
+        return
+      }
+      setBots(botIds.filter((id) => id !== botId))
+      if (focusedBotId === botId) {
+        setFocusedBotId(null)
+      }
+      toast.success('已删除会话')
+    },
+    [botIds, focusedBotId, setBots],
+  )
+
+  const addBot = useCallback(
+    (botId: BotId) => {
+      if (!setBots) {
+        return
+      }
+      const botName = chatbots.find((bot) => bot.id === botId)?.name || botId
+      if (botIds.includes(botId)) {
+        toast.error(`${botName} 已经在会话中`)
+        return
+      }
+      setBots([...botIds, botId])
+      setIsOverviewOpen(true)
+      toast.success(`已添加 ${botName}`)
+    },
+    [botIds, chatbots, setBots],
+  )
+
+  const toggleOverview = useCallback(() => {
+    setFocusedBotId(null)
+    setDraggingBotId(null)
+    setDragOverBotId(null)
+    setIsOverviewOpen((current) => !current)
+  }, [])
+
+  const setSessionDragPreview = useCallback(
+    (event: React.DragEvent<HTMLDivElement>, botId: BotId) => {
+      const botName = chatbots.find((bot) => bot.id === botId)?.name || botId
+      const preview = document.createElement('div')
+      preview.textContent = botName
+      preview.style.position = 'fixed'
+      preview.style.top = '-1000px'
+      preview.style.left = '-1000px'
+      preview.style.padding = '10px 14px'
+      preview.style.borderRadius = '12px'
+      preview.style.background = 'rgba(255, 255, 255, 0.96)'
+      preview.style.boxShadow = '0 12px 32px rgba(0, 0, 0, 0.18)'
+      preview.style.color = '#303030'
+      preview.style.fontSize = '14px'
+      preview.style.fontWeight = '600'
+      preview.style.pointerEvents = 'none'
+      document.body.appendChild(preview)
+      event.dataTransfer.setDragImage(preview, 40, 20)
+      window.setTimeout(() => preview.remove(), 0)
+    },
+    [chatbots],
   )
 
   const handleNewChat = useCallback(async () => {
@@ -468,26 +606,146 @@ const GeneralChatPanel: FC<{
     await Promise.all(promises)
   }, [])
 
+  const showSessionOverview = isOverviewOpen || botIds.length === 0
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
-      <div
-        className={cx(
-          'grid overflow-hidden grow auto-rows-fr',
-          botIds.length % 3 === 0 ? 'grid-cols-3' : 'grid-cols-2',
-          botIds.length > 3 ? 'gap-2' : 'gap-3',
-        )}
-      >
-        {botIds.map((botId, index) => (
-          <ConversationPanel
-            key={`${botId}-${index}`}
-            botId={botId}
-            mode="compact"
-            onSwitchBot={setBots ? (newBotId) => onSwitchBot(newBotId, index) : undefined}
-          />
-        ))}
-      </div>
+      {isScrollableBotLayout ? (
+        <div className="flex grow min-h-0 flex-col gap-2">
+          <div
+            className={cx(
+              'relative grow min-h-0 gap-3 pb-2 pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[#00000026] dark:scrollbar-thumb-[#ffffff33]',
+              showSessionOverview
+                ? 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] auto-rows-[minmax(220px,1fr)] overflow-auto'
+                : 'flex overflow-x-auto overflow-y-hidden snap-x snap-mandatory scroll-smooth',
+            )}
+          >
+            {botIds.map((botId, index) => {
+              const panelBasis = botIds.length > 1 ? 'calc((100% - 0.75rem) / 2)' : '100%'
+              const isFocused = focusedBotId === botId
+              const isHiddenForFocus = !showSessionOverview && !!focusedBotId && !isFocused
+              const canMoveInOverview = showSessionOverview && canMoveBots
+              return (
+                <div
+                  key={botId}
+                  className={cx(
+                    'h-full min-w-0 snap-start transition-opacity',
+                    isHiddenForFocus ? 'absolute top-0 opacity-0 pointer-events-none' : 'relative',
+                    canMoveInOverview && 'cursor-move',
+                    draggingBotId === botId && 'opacity-60',
+                    dragOverBotId === botId &&
+                      draggingBotId !== botId &&
+                      'rounded-2xl ring-2 ring-primary-blue ring-offset-2 ring-offset-transparent',
+                  )}
+                  draggable={canMoveInOverview}
+                  style={
+                    isHiddenForFocus
+                      ? { width: panelBasis, height: '100%', left: '-10000px' }
+                      : showSessionOverview
+                        ? undefined
+                        : { flex: `0 0 ${focusedBotId ? '100%' : panelBasis}` }
+                  }
+                  onDragStart={
+                    canMoveInOverview
+                      ? (event) => {
+                          event.dataTransfer.effectAllowed = 'move'
+                          event.dataTransfer.setData('text/plain', botId)
+                          setSessionDragPreview(event, botId)
+                          setDraggingBotId(botId)
+                          setDragOverBotId(null)
+                        }
+                      : undefined
+                  }
+                  onDragOver={
+                    canMoveInOverview
+                      ? (event) => {
+                          event.preventDefault()
+                          event.dataTransfer.dropEffect = 'move'
+                          if (draggingBotId && draggingBotId !== botId) {
+                            setDragOverBotId(botId)
+                          }
+                        }
+                      : undefined
+                  }
+                  onDragLeave={
+                    canMoveInOverview
+                      ? (event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                            setDragOverBotId((current) => (current === botId ? null : current))
+                          }
+                        }
+                      : undefined
+                  }
+                  onDrop={
+                    canMoveInOverview
+                      ? (event) => {
+                          event.preventDefault()
+                          const sourceBotId = event.dataTransfer.getData('text/plain') || draggingBotId
+                          const sourceIndex = botIds.findIndex((id) => id === sourceBotId)
+                          if (sourceIndex >= 0) {
+                            moveBot(sourceIndex, index)
+                          }
+                          setDraggingBotId(null)
+                          setDragOverBotId(null)
+                        }
+                      : undefined
+                  }
+                  onDragEnd={
+                    canMoveInOverview
+                      ? () => {
+                          setDraggingBotId(null)
+                          setDragOverBotId(null)
+                        }
+                      : undefined
+                  }
+                >
+                  <ConversationPanel
+                    botId={botId}
+                    mode="compact"
+                    focused={isFocused}
+                    overview={showSessionOverview}
+                    onOverviewToggle={toggleOverview}
+                    canMoveLeft={index > 0}
+                    canMoveRight={index < botIds.length - 1}
+                    onMoveLeft={canMoveInOverview ? () => moveBot(index, index - 1) : undefined}
+                    onMoveRight={canMoveInOverview ? () => moveBot(index, index + 1) : undefined}
+                    onRemove={showSessionOverview ? () => removeBot(botId) : undefined}
+                    onFocusToggle={() => {
+                      setIsOverviewOpen(false)
+                      setFocusedBotId((current) => (current === botId ? null : botId))
+                    }}
+                  />
+                </div>
+              )
+            })}
+            {showSessionOverview && <AddSessionButton chatbots={chatbots} onAdd={addBot} />}
+          </div>
+        </div>
+      ) : (
+        <div
+          className={cx(
+            'grid overflow-hidden grow auto-rows-fr',
+            botIds.length % 3 === 0 ? 'grid-cols-3' : 'grid-cols-2',
+            botIds.length > 3 ? 'gap-2' : 'gap-3',
+          )}
+        >
+          {botIds.map((botId, index) => (
+            <ConversationPanel
+              key={`${botId}-${index}`}
+              botId={botId}
+              mode="compact"
+              onSwitchBot={setBots ? (newBotId) => onSwitchBot(newBotId, index) : undefined}
+            />
+          ))}
+        </div>
+      )}
       {isInputBarOpen && (
-        <SyncInputBox layout={layout} onLayoutChange={onLayoutChange} onSend={handleSend} onNewChat={handleNewChat} />
+        <SyncInputBox
+          layout={layout}
+          onLayoutChange={onLayoutChange}
+          onSend={handleSend}
+          onNewChat={handleNewChat}
+        />
       )}
     </div>
   )
@@ -518,10 +776,25 @@ const SixBotChatPanel = () => {
 }
 
 const ImageInputPanel = () => {
+  const [bots, setBots] = useAtom(imageInputBotsAtom)
+  const [initialized, setInitialized] = useAtom(imageInputBotsInitializedAtom)
   const chatbots = useEnabledBots()
-  const chatbotIds = useMemo(() => chatbots.map((b) => b.id), [chatbots])
-  const activeBots = useMemo(() => chatbotIds.slice(0, 3), [chatbotIds])
-  return <GeneralChatPanel botIds={activeBots} supportImageInput={true} />
+  const chatbotIds = useMemo(() => chatbots.map((bot) => bot.id), [chatbots])
+  const hasSavedImageInputBots = initialized || bots.length > 0
+  const activeBots = useMemo(() => {
+    if (!hasSavedImageInputBots) {
+      return chatbotIds
+    }
+    return bots.filter((id) => chatbotIds.includes(id))
+  }, [bots, chatbotIds, hasSavedImageInputBots])
+  const setImageInputBots = useCallback(
+    (value: BotId[] | ((bots: BotId[]) => BotId[])) => {
+      setInitialized(true)
+      setBots(value)
+    },
+    [setBots, setInitialized],
+  )
+  return <GeneralChatPanel botIds={activeBots} setBots={setImageInputBots} supportImageInput={true} />
 }
 
 const MultiBotChatPanel: FC = () => {
@@ -561,9 +834,12 @@ const MultiBotChatPanelPage: FC = () => {
   }, [navigate])
 
   return (
-    <Suspense>
-      <MultiBotChatPanel />
-    </Suspense>
+    <>
+      <Suspense>
+        <MultiBotChatPanel />
+      </Suspense>
+      <Toaster />
+    </>
   )
 }
 
