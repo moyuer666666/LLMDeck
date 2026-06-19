@@ -1,4 +1,8 @@
-# ChatHub Desktop 🚀
+<p align="center">
+  <img src="llmdeck-desktop/build/icon.png" alt="LLMDeck icon" width="120">
+</p>
+
+# LLMDeck 🚀
 
 [![Electron](https://img.shields.io/badge/Electron-v42.2.0-blue.svg?style=flat-family&logo=electron)](https://www.electronjs.org/)
 [![Vite](https://img.shields.io/badge/Vite-v4.5.1-646CFF.svg?style=flat-family&logo=vite)](https://vitejs.dev/)
@@ -6,7 +10,7 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v3.4.0-38B2AC.svg?style=flat-family&logo=tailwindcss)](https://tailwindcss.com/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-**ChatHub Desktop** 是一款专为桌面端设计的、高颜值且极速的 **多 AI 机器人聚合客户端**。通过创新的分栏布局和统一的同步输入终端，它可以让你在同一界面下同时对比、协同和调用全球最主流的 AI 聊天服务。
+**LLMDeck** 是一款专为桌面端设计的、高颜值且极速的 **多 AI 机器人聚合客户端**。通过创新的分栏布局和统一的同步输入终端，它可以让你在同一界面下同时对比、协同和调用全球最主流的 AI 聊天服务。
 
 > [!NOTE]
 > 本项目是在开源项目 [ChatHub](https://github.com/chathub-dev/chathub) 的基础上进行二次开发与深度定制而成的。感谢原作者及社区的杰出工作！
@@ -58,7 +62,7 @@
 ### 1. 安装依赖
 
 ```bash
-cd chathub-desktop
+cd llmdeck-desktop
 yarn install
 ```
 
@@ -77,21 +81,24 @@ yarn dev
 ```bash
 yarn package
 ```
-打包输出的文件将保存在 `chathub-desktop/release/` 目录下。
+打包输出的文件将保存在 `llmdeck-desktop/release/` 目录下。
 
 ---
 
 ## 📂 项目结构
 
 ```text
-myChathub/
-├── chathub-desktop/
+LLMDeck/
+├── llmdeck-desktop/
+│   ├── build/
+│   │   ├── icon.ico         # Windows 应用图标
+│   │   └── icon.png         # 项目文档与应用图标
 │   ├── main.cjs             # Electron 主进程 (窗口创建、代理拦截、原生菜单移除等)
 │   ├── preload.cjs          # Electron 预加载脚本
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── components/  # 公用 UI 组件 (SyncInputBox, Sidebar, settings...)
-│   │   │   ├── hooks/       # React 自定义 Hook (useChatbots, usePremium...)
+│   │   │   ├── hooks/       # React 自定义 Hook (useEnabledBots, usePremium...)
 │   │   │   ├── pages/       # 主页面组件 (MultiBotChatPanel, SettingPage...)
 │   │   │   └── router.tsx   # 路由管理
 │   │   ├── services/        # 系统底层服务 (storage, sentry, user-config...)
