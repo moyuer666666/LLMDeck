@@ -293,16 +293,26 @@ const GeneralChatPanel: FC<{
               'button[data-testid="send-button"]',
               'button[aria-label*="Send"]',
               'button[aria-label*="send"]',
+              'button[aria-label*="Run"]',
+              'button[aria-label*="run"]',
               'button[aria-label*="submit"]',
               'button[aria-label*="Submit"]',
+              'button[title*="Run"]',
+              'button[title*="run"]',
               'form button[type="submit"]',
               'button.send-button',
               'button[class*="send" i]',
+              '[role="button"][aria-label*="Run"]',
+              '[role="button"][aria-label*="run"]',
               '[data-testid*="send"]'
             ];
 
             function isVisible(el) {
               return !!(el && (el.offsetHeight > 0 || el.offsetWidth > 0 || el.getClientRects().length > 0));
+            }
+
+            function isDisabled(el) {
+              return !!(el && (el.disabled || el.getAttribute('aria-disabled') === 'true'));
             }
 
             function findFirst(root, selectors) {
@@ -313,6 +323,45 @@ const GeneralChatPanel: FC<{
                 } catch(e) {}
               }
               return null;
+            }
+
+            function getButtonLabel(el) {
+              return [
+                el.getAttribute('aria-label'),
+                el.getAttribute('title'),
+                el.innerText,
+                el.textContent
+              ].filter(Boolean).join(' ').replace(/\\s+/g, ' ').trim().toLowerCase();
+            }
+
+            function isSendLikeButton(el) {
+              var label = getButtonLabel(el);
+              return /(^|\\s)(send|submit|run)(\\s|$)/.test(label) || label.indexOf('run ctrl') !== -1;
+            }
+
+            function findButtonByLabel(root) {
+              var candidates = root.querySelectorAll('button, [role="button"]');
+              for (var i = 0; i < candidates.length; i++) {
+                if (isVisible(candidates[i]) && isSendLikeButton(candidates[i])) {
+                  return candidates[i];
+                }
+              }
+              return null;
+            }
+
+            function findSubmitButton(root) {
+              return findFirst(root, buttonSelectors) || findButtonByLabel(root);
+            }
+
+            function pressEnter(el, useCtrl) {
+              el.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+                ctrlKey: !!useCtrl, bubbles: true, cancelable: true
+              }));
+              el.dispatchEvent(new KeyboardEvent('keyup', {
+                key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+                ctrlKey: !!useCtrl, bubbles: true, cancelable: true
+              }));
             }
 
             function dispatchInput(el) {
@@ -364,25 +413,19 @@ const GeneralChatPanel: FC<{
             });
 
             var form = input.closest('form');
-            var button = form ? findFirst(form, buttonSelectors) : null;
+            var button = form ? findSubmitButton(form) : null;
             if (!button) {
-              button = findFirst(document, buttonSelectors);
+              button = findSubmitButton(document);
             }
 
-            if (button && !button.disabled && button.getAttribute('aria-disabled') !== 'true') {
+            if (button && !isDisabled(button)) {
               button.click();
               return 'clicked-send';
             }
 
-            input.dispatchEvent(new KeyboardEvent('keydown', {
-              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-              bubbles: true, cancelable: true
-            }));
-            input.dispatchEvent(new KeyboardEvent('keyup', {
-              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-              bubbles: true, cancelable: true
-            }));
-            return 'pressed-enter';
+            var useCtrlEnter = window.location.hostname === 'aistudio.google.com';
+            pressEnter(input, useCtrlEnter);
+            return useCtrlEnter ? 'pressed-ctrl-enter' : 'pressed-enter';
           } catch(err) {
             return 'error: ' + err.message;
           }
@@ -634,23 +677,70 @@ const GeneralChatPanel: FC<{
             'button[data-testid="send-button"]',
             'button[aria-label*="Send"]',
             'button[aria-label*="send"]',
+            'button[aria-label*="Run"]',
+            'button[aria-label*="run"]',
             'button[aria-label*="发送"]',
             'button[aria-label*="submit"]',
             'button[aria-label*="Submit"]',
+            'button[title*="Run"]',
+            'button[title*="run"]',
             'form button[type="submit"]',
             'button.send-button',
             'button[class*="send" i]',
+            '[role="button"][aria-label*="Run"]',
+            '[role="button"][aria-label*="run"]',
             '[data-testid*="send"]'
           ];
+
+          function isVisible(el) {
+            return !!(el && (el.offsetHeight > 0 || el.offsetWidth > 0 || el.getClientRects().length > 0));
+          }
+
+          function isDisabled(el) {
+            return !!(el && (el.disabled || el.getAttribute('aria-disabled') === 'true'));
+          }
+
+          function getButtonLabel(el) {
+            return [
+              el.getAttribute('aria-label'),
+              el.getAttribute('title'),
+              el.innerText,
+              el.textContent
+            ].filter(Boolean).join(' ').replace(/\\s+/g, ' ').trim().toLowerCase();
+          }
+
+          function isSendLikeButton(el) {
+            var label = getButtonLabel(el);
+            return /(^|\\s)(send|submit|run)(\\s|$)/.test(label) || label.indexOf('run ctrl') !== -1;
+          }
           
           function getSendButton() {
             for (var i = 0; i < btnSelectors.length; i++) {
               try {
                 var btn = document.querySelector(btnSelectors[i]);
-                if (btn && btn.offsetHeight > 0) return btn;
+                if (isVisible(btn)) return btn;
               } catch(e) {}
             }
+            var candidates = document.querySelectorAll('button, [role="button"]');
+            for (var j = 0; j < candidates.length; j++) {
+              if (isVisible(candidates[j]) && isSendLikeButton(candidates[j])) {
+                return candidates[j];
+              }
+            }
             return null;
+          }
+
+          function pressEnter(el, useCtrl) {
+            var enterEvent = new KeyboardEvent('keydown', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              ctrlKey: !!useCtrl, bubbles: true, cancelable: true
+            });
+            el.dispatchEvent(enterEvent);
+            var enterUp = new KeyboardEvent('keyup', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              ctrlKey: !!useCtrl, bubbles: true, cancelable: true
+            });
+            el.dispatchEvent(enterUp);
           }
 
           // Wait up to 8 seconds (40 iterations * 200ms) for upload to finish
@@ -661,30 +751,22 @@ const GeneralChatPanel: FC<{
             // Check if there are active upload progress bars/spinners
             var uploading = document.querySelector('[class*="progress" i], [class*="loading" i], [class*="spinner" i]');
             
-            if (sendBtn && !sendBtn.disabled && !uploading) {
+            if (sendBtn && !isDisabled(sendBtn) && !uploading) {
               break;
             }
             await new Promise(function(resolve) { setTimeout(resolve, 200); });
           }
 
           var finalSendBtn = getSendButton();
-          if (finalSendBtn && !finalSendBtn.disabled) {
+          if (finalSendBtn && !isDisabled(finalSendBtn)) {
             finalSendBtn.click();
             return 'clicked-send';
           }
           
           if (document.activeElement) {
-            var enterEvent = new KeyboardEvent('keydown', {
-              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-              bubbles: true, cancelable: true
-            });
-            document.activeElement.dispatchEvent(enterEvent);
-            var enterUp = new KeyboardEvent('keyup', {
-              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
-              bubbles: true, cancelable: true
-            });
-            document.activeElement.dispatchEvent(enterUp);
-            return 'pressed-enter';
+            var useCtrlEnter = window.location.hostname === 'aistudio.google.com';
+            pressEnter(document.activeElement, useCtrlEnter);
+            return useCtrlEnter ? 'pressed-ctrl-enter' : 'pressed-enter';
           }
           
           return 'no-send-found-or-disabled';
