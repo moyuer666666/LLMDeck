@@ -1,4 +1,4 @@
-import { FC, useState, useEffect, useRef } from 'react'
+import { FC, useState, useEffect, useMemo, useRef } from 'react'
 import { FiEdit, FiPaperclip, FiX, FiFileText } from 'react-icons/fi'
 import { useTranslation } from 'react-i18next'
 import LayoutSwitch from './LayoutSwitch'
@@ -18,6 +18,24 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
   const [files, setFiles] = useState<File[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const filePreviews = useMemo(
+    () =>
+      files.map((file) => ({
+        file,
+        previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined,
+      })),
+    [files],
+  )
+
+  useEffect(() => {
+    return () => {
+      filePreviews.forEach(({ previewUrl }) => {
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl)
+        }
+      })
+    }
+  }, [filePreviews])
 
   // Auto-resize textarea height as text content changes
   useEffect(() => {
@@ -88,17 +106,16 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
       {/* File Previews Area */}
       {files.length > 0 && (
         <div className="flex flex-row flex-wrap gap-2 px-2 py-1">
-          {files.map((file, idx) => {
-            const isImage = file.type.startsWith('image/')
+          {filePreviews.map(({ file, previewUrl }, idx) => {
             return (
               <div
-                key={idx}
+                key={`${file.name}-${file.lastModified}-${idx}`}
                 className="relative flex items-center gap-2 p-1.5 pr-8 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs shadow-sm max-w-[200px]"
               >
-                {isImage ? (
+                {previewUrl ? (
                   <img
-                    src={URL.createObjectURL(file)}
-                    alt="Preview"
+                    src={previewUrl}
+                    alt={file.name}
                     className="w-8 h-8 object-cover rounded border border-zinc-100 dark:border-zinc-600"
                   />
                 ) : (

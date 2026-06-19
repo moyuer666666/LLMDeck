@@ -6,6 +6,8 @@ import { defineConfig } from 'vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig(({ mode }) => {
+  const isProduction = mode === 'production'
+
   return {
     base: './',
     resolve: {
@@ -22,7 +24,7 @@ export default defineConfig(({ mode }) => {
       tsconfigPaths(),
       react({
         babel: {
-          plugins: [jotaiDebugLabel, jotaiReactRefresh],
+          plugins: isProduction ? [] : [jotaiDebugLabel, jotaiReactRefresh],
         },
       }),
     ],

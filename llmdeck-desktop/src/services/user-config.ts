@@ -23,9 +23,32 @@ const userConfigWithDefaultValue = {
 
 export type UserConfig = typeof userConfigWithDefaultValue
 
+const userConfigKeys = Object.keys(userConfigWithDefaultValue)
+let cachedUserConfig: UserConfig | undefined
+let pendingUserConfig: Promise<UserConfig> | undefined
+
+function withDefaultConfig(config: Partial<UserConfig>): UserConfig {
+  return defaults({}, config, userConfigWithDefaultValue) as UserConfig
+}
+
 export async function getUserConfig(): Promise<UserConfig> {
-  const result = await Browser.storage.sync.get(Object.keys(userConfigWithDefaultValue))
-  return defaults(result, userConfigWithDefaultValue)
+  if (cachedUserConfig) {
+    return cachedUserConfig
+  }
+
+  if (!pendingUserConfig) {
+    pendingUserConfig = Browser.storage.sync
+      .get(userConfigKeys)
+      .then((result) => {
+        cachedUserConfig = withDefaultConfig(result as Partial<UserConfig>)
+        return cachedUserConfig
+      })
+      .finally(() => {
+        pendingUserConfig = undefined
+      })
+  }
+
+  return pendingUserConfig
 }
 
 export async function updateUserConfig(updates: Partial<UserConfig>) {
@@ -36,4 +59,13 @@ export async function updateUserConfig(updates: Partial<UserConfig>) {
       await Browser.storage.sync.remove(key)
     }
   }
+
+  const nextConfig = { ...(cachedUserConfig || userConfigWithDefaultValue), ...updates }
+  for (const [key, value] of Object.entries(nextConfig)) {
+    if (value === undefined) {
+      delete nextConfig[key as keyof typeof nextConfig]
+    }
+  }
+  cachedUserConfig = withDefaultConfig(nextConfig)
+  pendingUserConfig = undefined
 }

@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { useCallback, useEffect, useState } from 'react'
 import toast, { Toaster } from 'react-hot-toast'
 import { useTranslation } from 'react-i18next'
@@ -128,14 +127,11 @@ function SettingPage() {
         <ExportDataPanel />
       </div>
       {dirty && (
-        <motion.div
+        <div
           className="sticky bottom-0 w-full bg-primary-background border-t-2 border-primary-border px-5 py-4 drop-shadow flex flex-row items-center justify-center"
-          initial={{ y: 100 }}
-          animate={{ y: 0 }}
-          transition={{ type: 'tween', ease: 'easeInOut' }}
         >
           <Button color="primary" size="small" text={t('Save changes')} onClick={save} className="py-2" />
-        </motion.div>
+        </div>
       )}
       <Toaster position="bottom-center" />
     </PagePanel>

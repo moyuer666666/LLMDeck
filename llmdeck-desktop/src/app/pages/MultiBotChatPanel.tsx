@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useAtom, useAtomValue } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import { FC, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { FC, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { FiPlus } from 'react-icons/fi'
 import toast, { Toaster } from 'react-hot-toast'
 import { cx, getFaviconUrl } from '~/utils'
@@ -85,6 +85,7 @@ const GeneralChatPanel: FC<{
   setBots?: (value: BotId[] | ((bots: BotId[]) => BotId[])) => void
   supportImageInput?: boolean
 }> = ({ botIds, setBots, supportImageInput }) => {
+  const rootRef = useRef<HTMLDivElement>(null)
   const [layout, setLayout] = useAtom(layoutAtom)
   const [isInputBarOpen, setIsInputBarOpen] = useState(true)
   const [focusedBotId, setFocusedBotId] = useState<BotId | null>(null)
@@ -214,8 +215,12 @@ const GeneralChatPanel: FC<{
     [chatbots],
   )
 
+  const getBroadcastWebviews = useCallback(() => {
+    return rootRef.current?.querySelectorAll('webview[data-llmdeck-broadcast="true"]') || []
+  }, [])
+
   const handleNewChat = useCallback(async () => {
-    const webviews = document.querySelectorAll('webview')
+    const webviews = getBroadcastWebviews()
     const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
     for (const webview of Array.from(webviews)) {
@@ -258,11 +263,148 @@ const GeneralChatPanel: FC<{
         console.error('Failed to create new chat in webview:', err)
       }
     }
-  }, [])
+  }, [getBroadcastWebviews])
 
   const handleSend = useCallback(async (text: string, files: File[]) => {
-    const webviews = document.querySelectorAll('webview')
+    const webviews = getBroadcastWebviews()
     if (webviews.length === 0) return
+
+    const buildTextOnlySendScript = (prompt: string) => {
+      const serializedPrompt = JSON.stringify(prompt)
+      return `
+        (async function() {
+          try {
+            var text = ${serializedPrompt};
+            var inputSelectors = [
+              '#prompt-textarea',
+              'textarea[placeholder*="message"]',
+              'textarea[placeholder*="Message"]',
+              'textarea[placeholder*="chat"]',
+              'textarea[placeholder*="Chat"]',
+              'textarea[placeholder*="Ask"]',
+              'div[contenteditable="true"][role="textbox"]',
+              'p[contenteditable="true"]',
+              '[contenteditable="true"]',
+              '[role="textbox"]',
+              'textarea',
+              'input[type="text"]'
+            ];
+            var buttonSelectors = [
+              'button[data-testid="send-button"]',
+              'button[aria-label*="Send"]',
+              'button[aria-label*="send"]',
+              'button[aria-label*="submit"]',
+              'button[aria-label*="Submit"]',
+              'form button[type="submit"]',
+              'button.send-button',
+              'button[class*="send" i]',
+              '[data-testid*="send"]'
+            ];
+
+            function isVisible(el) {
+              return !!(el && (el.offsetHeight > 0 || el.offsetWidth > 0 || el.getClientRects().length > 0));
+            }
+
+            function findFirst(root, selectors) {
+              for (var i = 0; i < selectors.length; i++) {
+                try {
+                  var el = root.querySelector(selectors[i]);
+                  if (isVisible(el)) return el;
+                } catch(e) {}
+              }
+              return null;
+            }
+
+            function dispatchInput(el) {
+              try {
+                el.dispatchEvent(new InputEvent('input', {
+                  bubbles: true,
+                  inputType: 'insertText',
+                  data: text
+                }));
+              } catch(e) {
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            var input = findFirst(document, inputSelectors);
+            if (!input) return 'no-input-found';
+
+            input.focus();
+            if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+              var proto = input.tagName === 'INPUT' ? window.HTMLInputElement.prototype : window.HTMLTextAreaElement.prototype;
+              var nativeSetter = Object.getOwnPropertyDescriptor(proto, 'value');
+              if (nativeSetter && nativeSetter.set) {
+                nativeSetter.set.call(input, text);
+              } else {
+                input.value = text;
+              }
+              dispatchInput(input);
+            } else {
+              input.textContent = '';
+              document.execCommand('insertText', false, text);
+              dispatchInput(input);
+            }
+
+            await new Promise(function(resolve) {
+              var settled = false;
+              function finish() {
+                if (!settled) {
+                  settled = true;
+                  resolve(undefined);
+                }
+              }
+              if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(function() {
+                  requestAnimationFrame(finish);
+                });
+              }
+              setTimeout(finish, 50);
+            });
+
+            var form = input.closest('form');
+            var button = form ? findFirst(form, buttonSelectors) : null;
+            if (!button) {
+              button = findFirst(document, buttonSelectors);
+            }
+
+            if (button && !button.disabled && button.getAttribute('aria-disabled') !== 'true') {
+              button.click();
+              return 'clicked-send';
+            }
+
+            input.dispatchEvent(new KeyboardEvent('keydown', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              bubbles: true, cancelable: true
+            }));
+            input.dispatchEvent(new KeyboardEvent('keyup', {
+              key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+              bubbles: true, cancelable: true
+            }));
+            return 'pressed-enter';
+          } catch(err) {
+            return 'error: ' + err.message;
+          }
+        })()
+      `
+    }
+
+    if (files.length === 0 && text.trim()) {
+      await Promise.all(
+        Array.from(webviews).map(async (webview) => {
+          try {
+            const wv = webview as any
+            wv.focus()
+            const result = await wv.executeJavaScript(buildTextOnlySendScript(text))
+            console.log('Quick send result:', result)
+          } catch (err) {
+            console.error('Failed to broadcast to webview:', err)
+          }
+        }),
+      )
+      return
+    }
 
     // Helper: read file as base64
     const readFileAsBase64 = (file: File): Promise<string> => {
@@ -592,12 +734,12 @@ const GeneralChatPanel: FC<{
     })
 
     await Promise.all(promises)
-  }, [])
+  }, [getBroadcastWebviews])
 
   const showSessionOverview = isOverviewOpen || botIds.length === 0
 
   return (
-    <div className="flex flex-col overflow-hidden h-full">
+    <div ref={rootRef} className="flex flex-col overflow-hidden h-full">
       {isScrollableBotLayout ? (
         <div className="flex grow min-h-0 flex-col gap-2">
           <div
@@ -692,16 +834,19 @@ const GeneralChatPanel: FC<{
                     mode="compact"
                     focused={isFocused}
                     overview={showSessionOverview}
+                    activeForBroadcast={!focusedBotId || isFocused}
                     onOverviewToggle={toggleOverview}
                     canMoveLeft={index > 0}
                     canMoveRight={index < botIds.length - 1}
                     onMoveLeft={canMoveInOverview ? () => moveBot(index, index - 1) : undefined}
                     onMoveRight={canMoveInOverview ? () => moveBot(index, index + 1) : undefined}
                     onRemove={showSessionOverview ? () => removeBot(botId) : undefined}
-                    onFocusToggle={() => {
-                      setIsOverviewOpen(false)
-                      setFocusedBotId((current) => (current === botId ? null : botId))
-                    }}
+                    onFocusToggle={
+                      () => {
+                        setIsOverviewOpen(false)
+                        setFocusedBotId((current) => (current === botId ? null : botId))
+                      }
+                    }
                   />
                 </div>
               )
@@ -804,22 +949,62 @@ const MultiBotChatPanel: FC = () => {
 
 let hasRedirectedOnStartup = false
 
-const MultiBotChatPanelPage: FC = () => {
+const MultiBotChatPanelPage: FC<{
+  skipStartupRedirect?: boolean
+}> = ({ skipStartupRedirect }) => {
   const navigate = useNavigate()
+  const [startupRouteReady, setStartupRouteReady] = useState(skipStartupRedirect || hasRedirectedOnStartup)
+
   useEffect(() => {
-    if (!hasRedirectedOnStartup) {
-      hasRedirectedOnStartup = true
-      getUserConfig().then((config) => {
+    let cancelled = false
+
+    if (skipStartupRedirect) {
+      setStartupRouteReady(true)
+      return
+    }
+
+    if (hasRedirectedOnStartup) {
+      setStartupRouteReady(true)
+      return
+    }
+
+    hasRedirectedOnStartup = true
+    getUserConfig()
+      .then((config) => {
+        if (cancelled) {
+          return
+        }
+
         if (config.startupPage && config.startupPage !== 'all' && config.chatbots.some((b) => b.id === config.startupPage)) {
-          navigate({
+          void navigate({
             to: '/chat/$botId',
             params: { botId: config.startupPage },
             replace: true,
+          }).catch(() => {
+            if (!cancelled) {
+              setStartupRouteReady(true)
+            }
           })
+          return
+        }
+
+        setStartupRouteReady(true)
+      })
+      .catch((err) => {
+        console.error('Failed to resolve startup route:', err)
+        if (!cancelled) {
+          setStartupRouteReady(true)
         }
       })
+
+    return () => {
+      cancelled = true
     }
-  }, [navigate])
+  }, [navigate, skipStartupRedirect])
+
+  if (!startupRouteReady) {
+    return null
+  }
 
   return (
     <>

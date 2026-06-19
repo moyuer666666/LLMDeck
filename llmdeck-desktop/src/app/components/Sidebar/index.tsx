@@ -1,7 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { motion } from 'framer-motion'
 import { useAtom, useSetAtom } from 'jotai'
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import allInOneIcon from '~/assets/all-in-one.svg'
 import brandMark from '~/assets/brand-mark-clean.png'
@@ -13,9 +12,10 @@ import { useEnabledBots } from '~app/hooks/use-enabled-bots'
 import { releaseNotesAtom, sidebarCollapsedAtom } from '~app/state'
 import { checkReleaseNotes } from '~services/release-notes'
 import GuideModal from '../GuideModal'
-import ThemeSettingModal from '../ThemeSettingModal'
 import Tooltip from '../Tooltip'
 import NavLink from './NavLink'
+
+const ThemeSettingModal = lazy(() => import('../ThemeSettingModal'))
 
 function IconButton(props: { icon: string; onClick?: () => void }) {
   return (
@@ -40,7 +40,7 @@ function Sidebar() {
   }, [setReleaseNotes])
 
   return (
-    <motion.aside
+    <aside
       className={cx(
         'flex flex-col bg-primary-background bg-opacity-40 overflow-hidden',
         collapsed ? 'items-center px-[0.9375rem]' : 'w-[14.375rem] px-4',
@@ -56,10 +56,13 @@ function Sidebar() {
             </span>
           </div>
         )}
-        <motion.img
+        <img
           src={collapseIcon}
-          className={cx('h-6 w-6 shrink-0 cursor-pointer', !collapsed && 'ml-3')}
-          animate={{ rotate: collapsed ? 180 : 0 }}
+          className={cx(
+            'h-6 w-6 shrink-0 cursor-pointer transition-transform duration-200',
+            collapsed && 'rotate-180',
+            !collapsed && 'ml-3',
+          )}
           onClick={() => setCollapsed((c) => !c)}
         />
       </div>
@@ -94,8 +97,12 @@ function Sidebar() {
         </div>
       </div>
       <GuideModal />
-      <ThemeSettingModal open={themeSettingModalOpen} onClose={() => setThemeSettingModalOpen(false)} />
-    </motion.aside>
+      {themeSettingModalOpen && (
+        <Suspense fallback={null}>
+          <ThemeSettingModal open={themeSettingModalOpen} onClose={() => setThemeSettingModalOpen(false)} />
+        </Suspense>
+      )}
+    </aside>
   )
 }
 

@@ -1,13 +1,17 @@
 import { RouterProvider } from '@tanstack/react-router'
+import { Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { getUserConfig } from '~services/user-config'
-import '../services/sentry'
 import './base.scss'
 import './i18n'
 import { router } from './router'
 
 const container = document.getElementById('app')!
 const root = createRoot(container)
+
+if (import.meta.env.VITE_SENTRY_DSN) {
+  void import('../services/sentry')
+}
 
 if (window.electronAPI) {
   getUserConfig().then((config) => {
@@ -21,7 +25,11 @@ if (window.electronAPI) {
 const isElectron = navigator.userAgent.toLowerCase().includes('(llmdeck)')
 
 if (isElectron) {
-  root.render(<RouterProvider router={router} />)
+  root.render(
+    <Suspense fallback={null}>
+      <RouterProvider router={router} />
+    </Suspense>,
+  )
 } else {
   root.render(
     <div

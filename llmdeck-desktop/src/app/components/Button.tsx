@@ -1,8 +1,6 @@
 import { cx } from '~/utils'
-import { ButtonHTMLAttributes, FC, ReactNode } from 'react'
-import { BeatLoader } from 'react-spinners'
+import { ButtonHTMLAttributes, ReactNode } from 'react'
 import React from 'react'
-import { motion } from 'framer-motion'
 
 export interface Props {
   text: string
@@ -32,7 +30,12 @@ const Button = React.forwardRef<HTMLButtonElement, Props>((props, ref) => {
       onClick={props.onClick}
     >
       {props.isLoading ? (
-        <BeatLoader size={size === 'normal' ? 10 : 5} color={props.color === 'primary' ? 'white' : '#303030'} />
+        <span
+          className={cx(
+            'block rounded-full border-2 border-current border-t-transparent animate-spin',
+            size === 'normal' ? 'h-5 w-5' : 'h-3 w-3',
+          )}
+        />
       ) : (
         <div className="flex flex-row items-center gap-1 min-w-max">
           {props.icon}
@@ -46,5 +49,3 @@ const Button = React.forwardRef<HTMLButtonElement, Props>((props, ref) => {
 Button.displayName = 'Button'
 
 export default Button
-
-export const MotionButton = motion(Button)

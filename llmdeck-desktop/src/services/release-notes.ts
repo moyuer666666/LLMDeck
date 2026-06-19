@@ -4,6 +4,14 @@ import { getVersion } from '~utils'
 
 const RELEASE_NOTES = [
   {
+    version: '1.0.3',
+    notes: [
+      '优化应用启动加载速度，减少首屏不必要的代码和依赖加载。',
+      '优化 All-In-One 与单 bot 页面切换速度，保留已加载的 webview。',
+      '单 bot 页面使用独立预热会话，避免继承 All-In-One 当前对话。',
+    ],
+  },
+  {
     version: '1.0.2',
     notes: [
       '优化多会话窗口管理和缩略视图。',
