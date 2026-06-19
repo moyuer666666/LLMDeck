@@ -17,7 +17,7 @@ import {
 import { getVersion } from '~utils'
 import PagePanel from '../components/Page'
 
-const UPDATE_RELEASES_URL = 'https://github.com/moyuer666666/myChathub/releases/latest'
+const UPDATE_RELEASES_URL = 'https://github.com/moyuer666666/LLMDeck/releases'
 
 function SettingPage() {
   const { t } = useTranslation()
