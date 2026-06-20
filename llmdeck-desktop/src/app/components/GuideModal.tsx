@@ -4,10 +4,21 @@ import { incrAppOpenTimes } from '~services/storage/open-times'
 import Button from './Button'
 import Dialog from './Dialog'
 
+const PROJECT_URL = 'https://github.com/moyuer666666/LLMDeck'
+
 const GuideModal: FC = () => {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [openTimes, setOpenTimes] = useState(0)
+
+  const openProjectPage = () => {
+    setOpen(false)
+    if (window.electronAPI?.openExternal) {
+      void window.electronAPI.openExternal(PROJECT_URL)
+      return
+    }
+    window.open(PROJECT_URL, '_blank', 'noopener,noreferrer')
+  }
 
   useEffect(() => {
     incrAppOpenTimes().then((t) => {
@@ -20,16 +31,10 @@ const GuideModal: FC = () => {
 
   if (openTimes === 15) {
     return (
-      <Dialog title="🌟🌟🌟🌟🌟" open={open} onClose={() => setOpen(false)} className="rounded-2xl w-[600px]">
+      <Dialog title={t('Recommend LLMDeck')} open={open} onClose={() => setOpen(false)} className="rounded-2xl w-[600px]">
         <div className="flex flex-col items-center gap-4 py-6">
-          <p className="font-semibold text-primary-text">{t('Enjoy ChatHub? Give us a 5-star rating!')}</p>
-          <a
-            href="https://chrome.google.com/webstore/detail/chathub-all-in-one-chatbo/iaakpnchhognanibcahlpcplchdfmgma"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Button text={t('Write review')} />
-          </a>
+          <p className="font-semibold text-primary-text">{t('Enjoy LLMDeck? Recommend it to others!')}</p>
+          <Button text={t('Open project page')} onClick={openProjectPage} />
         </div>
       </Dialog>
     )

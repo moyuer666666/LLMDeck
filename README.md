@@ -126,7 +126,7 @@ LLMDeck/
 
 以下是本项目目前计划解决和改进的待办事项：
 
-- [ ] **修复 Gemini 笔记本加载错误**：修复打开 Gemini 网页时可能弹出“无法加载您的笔记本”的问题（在分支上fix-gemini-notebook-error(未解决)处理）。
+- [x] **修复 Gemini 笔记本加载错误**：修复打开 Gemini 网页时可能弹出“无法加载您的笔记本”的问题，并补齐 AI Studio / Gemini 在 Electron webview 中需要的权限处理。
 - [ ] **重构 Prompt 提示词库**：重新设计和连接提示词快捷面板（支持 `/` 快捷指令和输入框左侧书本图标的交互）。
 - [ ] **支持应用自动更新 (Auto-updater)**：配置发布管道并集成 Electron 自动升级功能。
 

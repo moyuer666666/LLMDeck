@@ -22,7 +22,7 @@ if (window.electronAPI) {
   })
 }
 
-const isElectron = navigator.userAgent.toLowerCase().includes('(llmdeck)')
+const isElectron = Boolean(window.electronAPI) || navigator.userAgent.toLowerCase().includes('(llmdeck)')
 
 if (isElectron) {
   root.render(

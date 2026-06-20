@@ -325,6 +325,16 @@ const GeneralChatPanel: FC<{
               return null;
             }
 
+            function findFirstButton(root, selectors) {
+              for (var i = 0; i < selectors.length; i++) {
+                try {
+                  var el = root.querySelector(selectors[i]);
+                  if (isVisible(el) && !isRejectedSendButton(el)) return el;
+                } catch(e) {}
+              }
+              return null;
+            }
+
             function getButtonLabel(el) {
               return [
                 el.getAttribute('aria-label'),
@@ -334,9 +344,15 @@ const GeneralChatPanel: FC<{
               ].filter(Boolean).join(' ').replace(/\\s+/g, ' ').trim().toLowerCase();
             }
 
+            function isRejectedSendButton(el) {
+              var label = getButtonLabel(el);
+              return /run settings|settings|get code|temperature|thinking level|structured outputs|code execution/.test(label);
+            }
+
             function isSendLikeButton(el) {
               var label = getButtonLabel(el);
-              return /(^|\\s)(send|submit|run)(\\s|$)/.test(label) || label.indexOf('run ctrl') !== -1;
+              if (!label || isRejectedSendButton(el)) return false;
+              return label.indexOf('run ctrl') !== -1 || /^run$/.test(label) || /(^|\\s)(send|submit)(\\s|$)/.test(label);
             }
 
             function findButtonByLabel(root) {
@@ -350,7 +366,17 @@ const GeneralChatPanel: FC<{
             }
 
             function findSubmitButton(root) {
-              return findFirst(root, buttonSelectors) || findButtonByLabel(root);
+              return findFirstButton(root, buttonSelectors) || findButtonByLabel(root);
+            }
+
+            function findSubmitButtonNearInput(input) {
+              var node = input;
+              for (var depth = 0; node && node !== document.body && depth < 8; depth++) {
+                var button = findSubmitButton(node);
+                if (button) return button;
+                node = node.parentElement;
+              }
+              return null;
             }
 
             function pressEnter(el, useCtrl) {
@@ -415,6 +441,11 @@ const GeneralChatPanel: FC<{
             var form = input.closest('form');
             var button = form ? findSubmitButton(form) : null;
             if (!button) {
+              button = findSubmitButtonNearInput(input);
+            }
+
+            var useCtrlEnter = window.location.hostname === 'aistudio.google.com';
+            if (!button && !useCtrlEnter) {
               button = findSubmitButton(document);
             }
 
@@ -423,7 +454,6 @@ const GeneralChatPanel: FC<{
               return 'clicked-send';
             }
 
-            var useCtrlEnter = window.location.hostname === 'aistudio.google.com';
             pressEnter(input, useCtrlEnter);
             return useCtrlEnter ? 'pressed-ctrl-enter' : 'pressed-enter';
           } catch(err) {
@@ -700,6 +730,16 @@ const GeneralChatPanel: FC<{
             return !!(el && (el.disabled || el.getAttribute('aria-disabled') === 'true'));
           }
 
+          function findFirst(root, selectors) {
+            for (var i = 0; i < selectors.length; i++) {
+              try {
+                var el = root.querySelector(selectors[i]);
+                if (isVisible(el)) return el;
+              } catch(e) {}
+            }
+            return null;
+          }
+
           function getButtonLabel(el) {
             return [
               el.getAttribute('aria-label'),
@@ -709,25 +749,70 @@ const GeneralChatPanel: FC<{
             ].filter(Boolean).join(' ').replace(/\\s+/g, ' ').trim().toLowerCase();
           }
 
+          function isRejectedSendButton(el) {
+            var label = getButtonLabel(el);
+            return /run settings|settings|get code|temperature|thinking level|structured outputs|code execution/.test(label);
+          }
+
           function isSendLikeButton(el) {
             var label = getButtonLabel(el);
-            return /(^|\\s)(send|submit|run)(\\s|$)/.test(label) || label.indexOf('run ctrl') !== -1;
+            if (!label || isRejectedSendButton(el)) return false;
+            return label.indexOf('run ctrl') !== -1 || /^run$/.test(label) || /(^|\\s)(send|submit)(\\s|$)/.test(label);
           }
-          
-          function getSendButton() {
-            for (var i = 0; i < btnSelectors.length; i++) {
-              try {
-                var btn = document.querySelector(btnSelectors[i]);
-                if (isVisible(btn)) return btn;
-              } catch(e) {}
-            }
-            var candidates = document.querySelectorAll('button, [role="button"]');
-            for (var j = 0; j < candidates.length; j++) {
-              if (isVisible(candidates[j]) && isSendLikeButton(candidates[j])) {
-                return candidates[j];
+
+          function findButtonByLabel(root) {
+            var candidates = root.querySelectorAll('button, [role="button"]');
+            for (var i = 0; i < candidates.length; i++) {
+              if (isVisible(candidates[i]) && isSendLikeButton(candidates[i])) {
+                return candidates[i];
               }
             }
             return null;
+          }
+
+          function findButtonNearElement(el) {
+            var node = el;
+            for (var depth = 0; node && node !== document.body && depth < 8; depth++) {
+              var button = findButtonByLabel(node);
+              if (button) return button;
+              node = node.parentElement;
+            }
+            return null;
+          }
+          
+          function getSendButton() {
+            var isAiStudio = window.location.hostname === 'aistudio.google.com';
+            if (isAiStudio) {
+              var activeInput = document.activeElement;
+              var nearbyButton = activeInput ? findButtonNearElement(activeInput) : null;
+              if (nearbyButton) return nearbyButton;
+
+              var promptInput = findFirst(document, [
+                '#prompt-textarea',
+                'textarea[placeholder*="message"]',
+                'textarea[placeholder*="Message"]',
+                'textarea[placeholder*="chat"]',
+                'textarea[placeholder*="Chat"]',
+                'textarea[placeholder*="Ask"]',
+                'div[contenteditable="true"][role="textbox"]',
+                'p[contenteditable="true"]',
+                '[contenteditable="true"]',
+                '[role="textbox"]',
+                'textarea',
+                'input[type="text"]'
+              ]);
+              nearbyButton = promptInput ? findButtonNearElement(promptInput) : null;
+              return nearbyButton;
+            }
+
+            for (var i = 0; i < btnSelectors.length; i++) {
+              try {
+                var btn = document.querySelector(btnSelectors[i]);
+                if (isVisible(btn) && !isRejectedSendButton(btn)) return btn;
+              } catch(e) {}
+            }
+
+            return findButtonByLabel(document);
           }
 
           function pressEnter(el, useCtrl) {
