@@ -4,6 +4,14 @@ import { getVersion } from '~utils'
 
 const RELEASE_NOTES = [
   {
+    version: '2.0.0',
+    notes: [
+      '修复 Gemini 笔记本加载失败和 AI Studio 权限拒绝问题。',
+      '修复 AI Studio 同步发送误触设置面板的问题。',
+      '将使用一段时间后的弹窗改为推荐 LLMDeck 项目。',
+    ],
+  },
+  {
     version: '1.0.3',
     notes: [
       '优化应用启动加载速度，减少首屏不必要的代码和依赖加载。',
