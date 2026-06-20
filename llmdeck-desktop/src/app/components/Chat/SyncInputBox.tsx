@@ -12,12 +12,17 @@ interface Props {
   onNewChat: () => void
 }
 
+function isComposingEvent(event: Event) {
+  return 'isComposing' in event && Boolean((event as Event & { isComposing?: boolean }).isComposing)
+}
+
 const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) => {
   const { t } = useTranslation()
-  const [text, setText] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const composingRef = useRef(false)
+  const inputPlaceholder = t('Use / to select prompts, Shift+Enter to add new line')
   const filePreviews = useMemo(
     () =>
       files.map((file) => ({
@@ -37,26 +42,18 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
     }
   }, [filePreviews])
 
-  // Auto-resize textarea height as text content changes
-  useEffect(() => {
-    const textarea = textareaRef.current
-    if (!textarea) return
-    textarea.style.height = '24px' // Reset height
-    const scrollHeight = textarea.scrollHeight
-    textarea.style.height = `${Math.min(scrollHeight, 120)}px` // Grow up to 120px
-  }, [text])
-
   const handleSend = () => {
-    if (!text.trim() && files.length === 0) return
-    onSend(text, files)
-    setText('')
+    const currentText = textareaRef.current?.value ?? ''
+    if (!currentText.trim() && files.length === 0) return
+    onSend(currentText, files)
     setFiles([])
     if (textareaRef.current) {
-      textareaRef.current.style.height = '24px'
+      textareaRef.current.value = ''
     }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isComposingEvent(e.nativeEvent) || composingRef.current) return
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -137,34 +134,47 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
       )}
 
       {/* Main Input Container */}
-      <div className="flex flex-row items-end gap-3 w-full">
+      <div className="flex flex-row items-center gap-3 w-full min-w-0">
         {/* Left Side: Layout Switch in rounded white box */}
         <div className="flex bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl p-1 shrink-0 h-[46px] items-center shadow-sm">
           <LayoutSwitch layout={layout} onChange={onLayoutChange} />
         </div>
 
         {/* Center & Right: Text input bar */}
-        <div className="flex grow flex-row items-end gap-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-2 shadow-sm min-h-[46px]">
+        <div className="flex grow min-w-0 flex-row items-center gap-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-2 shadow-sm min-h-[46px]">
           {/* New Chat Button — uses edit/compose icon like ChatGPT/Claude */}
           <button
             onClick={onNewChat}
-            className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors mb-0.5 shrink-0"
+            className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors shrink-0"
             title={t('New conversation for all AI')}
           >
             <FiEdit className="w-5 h-5" />
           </button>
 
           {/* Text Area */}
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onPaste={handlePaste}
-            placeholder={t('Use / to select prompts, Shift+Enter to add new line')}
-            className="grow self-center bg-transparent border-0 resize-none outline-none text-sm leading-6 text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 dark:placeholder-zinc-500 font-sans min-h-[24px] max-h-[120px] py-0"
-          />
+          <div className="relative flex-1 min-w-0 self-center">
+            <textarea
+              placeholder=" "
+              ref={textareaRef}
+              rows={1}
+              onCompositionStart={() => {
+                composingRef.current = true
+              }}
+              onCompositionEnd={() => {
+                composingRef.current = false
+              }}
+              onBlur={() => {
+                composingRef.current = false
+              }}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              aria-label={inputPlaceholder}
+              className="peer block w-full h-[28px] min-h-[28px] max-h-[28px] bg-transparent border-0 resize-none outline-none text-sm leading-[28px] text-zinc-800 dark:text-zinc-200 font-sans py-0 overflow-y-auto placeholder:text-transparent scrollbar-thin scrollbar-track-transparent scrollbar-thumb-[#00000026] dark:scrollbar-thumb-[#ffffff33]"
+            />
+            <div className="pointer-events-none absolute inset-0 hidden items-center overflow-hidden text-sm leading-5 text-zinc-400 dark:text-zinc-500 font-sans peer-placeholder-shown:flex peer-focus:hidden">
+              <span className="truncate">{inputPlaceholder}</span>
+            </div>
+          </div>
 
           {/* Hidden File Input */}
           <input
@@ -178,7 +188,7 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
           {/* Attachment Paperclip Button */}
           <button
             onClick={triggerFileSelect}
-            className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors mb-0.5"
+            className="p-1 hover:text-zinc-600 dark:hover:text-zinc-300 text-zinc-400 rounded-lg cursor-pointer transition-colors shrink-0"
             title={t('Attach files or images')}
           >
             <FiPaperclip className="w-5 h-5" />
@@ -187,12 +197,9 @@ const SyncInputBox: FC<Props> = ({ layout, onLayoutChange, onSend, onNewChat }) 
           {/* Send Button */}
           <button
             onClick={handleSend}
-            disabled={!text.trim() && files.length === 0}
             className={cx(
-              'px-4 py-1.5 rounded-full text-xs font-semibold select-none transition-all duration-200 cursor-pointer mb-0.5 shrink-0',
-              text.trim() || files.length > 0
-                ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-sm'
-                : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-400 dark:text-zinc-500 cursor-not-allowed',
+              'px-4 py-1.5 rounded-full text-xs font-semibold select-none transition-all duration-200 cursor-pointer shrink-0',
+              'bg-blue-500 hover:bg-blue-600 text-white shadow-sm',
             )}
           >
             {t('Send')}

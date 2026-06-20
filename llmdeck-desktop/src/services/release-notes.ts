@@ -4,6 +4,13 @@ import { getVersion } from '~utils'
 
 const RELEASE_NOTES = [
   {
+    version: '2.0.1',
+    notes: [
+      '修复 Google 登录被识别为不安全浏览器的问题。',
+      'Google 登录使用兼容 User-Agent，AI Studio 生成阶段保持浏览器 User-Agent。',
+    ],
+  },
+  {
     version: '2.0.0',
     notes: [
       '修复 Gemini 笔记本加载失败和 AI Studio 权限拒绝问题。',

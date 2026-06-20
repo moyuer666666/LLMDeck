@@ -3,6 +3,7 @@ const path = require('path')
 
 const APP_ID = 'com.llmdeck.desktop'
 const APP_NAME = 'LLMDeck'
+const USER_AGENT_MARKER = 'LLMDeck'
 
 // Get localized labels for context menu items
 function getContextMenuLabels() {
@@ -25,18 +26,31 @@ function getContextMenuLabels() {
 // Enable webview tag
 console.log('--- Electron Main Process Starting ---')
 
-const BROWSER_USER_AGENT = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`
+const USER_AGENT = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 (${USER_AGENT_MARKER})`
+const AI_STUDIO_USER_AGENT = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`
 const ACCEPT_LANGUAGES = 'zh-CN,zh,en-US,en'
 const isDev = !app.isPackaged
 
 app.setName(APP_NAME)
-app.userAgentFallback = BROWSER_USER_AGENT
+app.userAgentFallback = USER_AGENT
 if (process.platform === 'win32') {
   app.setAppUserModelId(APP_ID)
 }
 
 const GOOGLE_AI_HOSTS = new Set(['aistudio.google.com', 'gemini.google.com'])
 const GOOGLE_RELATED_HOSTS = new Set(['google.com', 'googleapis.com', 'googleusercontent.com', 'gstatic.com'])
+const GOOGLE_LOGIN_COOKIE_NAMES = new Set([
+  'SID',
+  'HSID',
+  'SSID',
+  'APISID',
+  'SAPISID',
+  'LSID',
+  '__Secure-1PSID',
+  '__Secure-3PSID',
+  '__Secure-1PAPISID',
+  '__Secure-3PAPISID',
+])
 const GOOGLE_AI_PERMISSIONS = new Set([
   'clipboard-read',
   'clipboard-sanitized-write',
@@ -47,6 +61,9 @@ const GOOGLE_AI_PERMISSIONS = new Set([
   'top-level-storage-access',
 ])
 const COMMON_SAFE_PERMISSIONS = new Set(['clipboard-sanitized-write', 'fullscreen'])
+const trackedWebContents = new Set()
+let hasGoogleLogin = false
+let pendingGoogleLoginRefresh = null
 
 function getHost(value) {
   if (!value) return ''
@@ -72,9 +89,88 @@ function isGoogleRelatedHost(host) {
   return Array.from(GOOGLE_RELATED_HOSTS).some((baseHost) => host.endsWith(`.${baseHost}`))
 }
 
+function isGoogleAiUrl(value) {
+  return GOOGLE_AI_HOSTS.has(getHost(value))
+}
+
 function isGoogleAiWebContents(contents) {
   if (!contents || contents.isDestroyed()) return false
-  return GOOGLE_AI_HOSTS.has(getHost(contents.getURL()))
+  return isGoogleAiUrl(contents.getURL())
+}
+
+function getUserAgentForUrl(value) {
+  return hasGoogleLogin ? AI_STUDIO_USER_AGENT : USER_AGENT
+}
+
+function setUserAgentForUrl(contents, value) {
+  if (!contents || contents.isDestroyed()) return
+  contents.setUserAgent(getUserAgentForUrl(value))
+}
+
+function getRequestUserAgent(details) {
+  return hasGoogleLogin ? AI_STUDIO_USER_AGENT : USER_AGENT
+}
+
+function isGoogleLoginCookie(cookie) {
+  if (!cookie || !GOOGLE_LOGIN_COOKIE_NAMES.has(cookie.name)) return false
+  const domain = (cookie.domain || '').replace(/^\./, '').toLowerCase()
+  return domain === 'google.com' || domain.endsWith('.google.com')
+}
+
+function updateTrackedGoogleAiUserAgents(reloadAiPages = false) {
+  for (const contents of Array.from(trackedWebContents)) {
+    if (!contents || contents.isDestroyed()) {
+      trackedWebContents.delete(contents)
+      continue
+    }
+
+    const url = contents.getURL()
+    setUserAgentForUrl(contents, url)
+    if (reloadAiPages && isGoogleAiUrl(url)) {
+      contents.reload()
+    }
+  }
+}
+
+function refreshGoogleLoginState(ses) {
+  if (pendingGoogleLoginRefresh) return pendingGoogleLoginRefresh
+
+  pendingGoogleLoginRefresh = ses.cookies
+    .get({ url: 'https://accounts.google.com' })
+    .then((cookies) => {
+      const nextHasGoogleLogin = cookies.some(isGoogleLoginCookie)
+      if (nextHasGoogleLogin !== hasGoogleLogin) {
+        hasGoogleLogin = nextHasGoogleLogin
+        updateTrackedGoogleAiUserAgents(true)
+      }
+    })
+    .catch((err) => {
+      console.error('Failed to refresh Google login state:', err)
+    })
+    .finally(() => {
+      pendingGoogleLoginRefresh = null
+    })
+
+  return pendingGoogleLoginRefresh
+}
+
+function attachUserAgentSwitch(contents) {
+  if (!contents || contents.isDestroyed() || contents.__llmDeckUserAgentSwitch) return
+  contents.__llmDeckUserAgentSwitch = true
+  trackedWebContents.add(contents)
+  contents.once('destroyed', () => {
+    trackedWebContents.delete(contents)
+  })
+
+  contents.on('will-navigate', (event, url) => {
+    setUserAgentForUrl(contents, url)
+  })
+  contents.on('did-navigate', (event, url) => {
+    setUserAgentForUrl(contents, url)
+  })
+  contents.on('did-finish-load', () => {
+    setUserAgentForUrl(contents, contents.getURL())
+  })
 }
 
 function shouldAllowPermission(contents, permission, requestingOrigin, details = {}) {
@@ -103,7 +199,13 @@ function shouldAllowPermission(contents, permission, requestingOrigin, details =
 function configureSession(ses) {
   if (ses.__llmDeckConfigured) return
   ses.__llmDeckConfigured = true
-  ses.setUserAgent(BROWSER_USER_AGENT, ACCEPT_LANGUAGES)
+  ses.setUserAgent(USER_AGENT, ACCEPT_LANGUAGES)
+  refreshGoogleLoginState(ses)
+  ses.cookies.on('changed', (event, cookie) => {
+    if (isGoogleLoginCookie(cookie)) {
+      refreshGoogleLoginState(ses)
+    }
+  })
   ses.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
     return shouldAllowPermission(contents, permission, requestingOrigin, details)
   })
@@ -185,10 +287,10 @@ function createWindow() {
     },
   })
 
-  mainWindow.webContents.setUserAgent(BROWSER_USER_AGENT)
+  mainWindow.webContents.setUserAgent(USER_AGENT)
 
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    params.useragent = BROWSER_USER_AGENT
+    params.useragent = getUserAgentForUrl(params.src)
     delete webPreferences.preload
     webPreferences.nodeIntegration = false
     webPreferences.contextIsolation = true
@@ -196,14 +298,15 @@ function createWindow() {
   })
 
   mainWindow.webContents.on('did-attach-webview', (event, guestContents) => {
-    guestContents.setUserAgent(BROWSER_USER_AGENT)
+    setUserAgentForUrl(guestContents, guestContents.getURL())
+    attachUserAgentSwitch(guestContents)
   })
 
   // Use a dedicated session for webviews to handle headers cleanly
   const filter = { urls: ['<all_urls>'] }
 
   session.defaultSession.webRequest.onBeforeSendHeaders(filter, (details, callback) => {
-    details.requestHeaders['User-Agent'] = BROWSER_USER_AGENT
+    details.requestHeaders['User-Agent'] = getRequestUserAgent(details)
     callback({ requestHeaders: details.requestHeaders })
   })
 
